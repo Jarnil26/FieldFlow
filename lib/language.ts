@@ -1,0 +1,242 @@
+export type Language = "en" | "gu" | "hi"
+
+export const translations = {
+  en: {
+    // Common
+    selectLanguage: "Select Language",
+    selectRole: "Select Your Role",
+    logout: "Logout",
+    submit: "Submit",
+    cancel: "Cancel",
+    loading: "Loading...",
+
+    // Roles
+    salesman: "Salesman",
+    distributor: "Distributor",
+    owner: "Owner",
+
+    // Salesman
+    checkIn: "Check-in",
+    shopName: "Shop Name",
+    mobileNo: "Mobile No",
+    landmark: "Landmark",
+    takeSelfie: "Take Shop Selfie",
+    detectLocation: "Detect Shop Location",
+    productAvailable: "Product Available?",
+    yes: "Yes",
+    no: "No",
+    actualProblem: "Actual Problem",
+    priceHigh: "Price Too High",
+    noSpace: "No Space",
+    competitor: "Happy with Competitor",
+    other: "Other",
+    placeOrder: "Place Order",
+    productName: "Product Name",
+    quantity: "Quantity",
+    visitSubmitted: "Visit Submitted Successfully",
+
+    // Distributor
+    orderQueue: "Order Queue",
+    pendingOrders: "Pending Orders",
+    call: "Call",
+    markDelivered: "Mark as Delivered",
+    noOrders: "No pending orders",
+    delivered: "Delivered",
+
+    // Owner
+    dashboard: "Dashboard",
+    mapView: "Map View",
+    analytics: "Analytics",
+    exportData: "Export Data",
+    clearRecords: "Clear Monthly Records",
+    greenPins: "Green Pins: Product Available",
+    redPins: "Red Pins: Product Rejected",
+    totalVisits: "Total Visits",
+    productsStocked: "Products Stocked",
+    rejections: "Rejections",
+
+    // Auth
+    login: "Login",
+    signUp: "Sign Up",
+    email: "Email",
+    password: "Password",
+    fullName: "Full Name",
+    role: "Role",
+    alreadyHaveAccount: "Already have an account?",
+    dontHaveAccount: "Don't have an account?",
+
+    companyDetails: "Company Details",
+    companyName: "Company Name",
+    phone: "Phone Number",
+    address: "Address",
+    city: "City",
+    state: "State",
+    secretKey: "Secret Registration Key",
+    enterSecretKey: "Enter your secret key",
+    secretKeyHelp: "Contact admin for the secret registration key",
+    companyCode: "Company Code",
+    companyCodeHelp: "Ask your employer for the 6-character company code",
+    shareCompanyCode: "Share this code with your employees",
+    shareCompanyCodeHelp: "Your salesmen and distributors need this code to register",
+  },
+  gu: {
+    // Common
+    selectLanguage: "ભાષા પસંદ કરો",
+    selectRole: "તમારી ભૂમિકા પસંદ કરો",
+    logout: "લૉગઆઉટ",
+    submit: "સબમિટ કરો",
+    cancel: "રદ કરો",
+    loading: "લોડ થઈ રહ્યું છે...",
+
+    // Roles
+    salesman: "સેલ્સમેન",
+    distributor: "વિતરક",
+    owner: "માલિક",
+
+    // Salesman
+    checkIn: "ચેક-ઇન કરો",
+    shopName: "દુકાનનું નામ",
+    mobileNo: "મોબાઈલ નંબર",
+    landmark: "સીમાચિહ્ન",
+    takeSelfie: "દુકાનની સેલ્ફી લો",
+    detectLocation: "દુકાનનું સ્થાન શોધો",
+    productAvailable: "પ્રોડક્ટ ઉપલબ્ધ છે?",
+    yes: "હા",
+    no: "ના",
+    actualProblem: "વાસ્તવિક સમસ્યા",
+    priceHigh: "કિંમત વધારે છે",
+    noSpace: "જગ્યા નથી",
+    competitor: "હરીફથી સંતુષ્ટ",
+    other: "અન્ય",
+    placeOrder: "ઓર્ડર આપો",
+    productName: "પ્રોડક્ટનું નામ",
+    quantity: "જથ્થો",
+    visitSubmitted: "મુલાકાત સફળતાપૂર્વક સબમિટ થઈ",
+
+    // Distributor
+    orderQueue: "ઓર્ડર કતાર",
+    pendingOrders: "બાકી ઓર્ડર",
+    call: "કોલ કરો",
+    markDelivered: "ડિલિવરી થઈ ગઈ",
+    noOrders: "કોઈ બાકી ઓર્ડર નથી",
+    delivered: "ડિલિવર થયું",
+
+    // Owner
+    dashboard: "ડેશબોર્ડ",
+    mapView: "નકશો દૃશ્ય",
+    analytics: "વિશ્લેષણ",
+    exportData: "ડેટા નિકાસ કરો",
+    clearRecords: "માસિક રેકોર્ડ સાફ કરો",
+    greenPins: "લીલા પિન: પ્રોડક્ટ ઉપલબ્ધ",
+    redPins: "લાલ પિન: પ્રોડક્ટ નકારાયું",
+    totalVisits: "કુલ મુલાકાતો",
+    productsStocked: "સ્ટોક થયેલ પ્રોડક્ટ",
+    rejections: "નકારણા",
+
+    // Auth
+    login: "લૉગિન",
+    signUp: "સાઇન અપ",
+    email: "ઇમેઇલ",
+    password: "પાસવર્ડ",
+    fullName: "પૂરું નામ",
+    role: "ભૂમિકા",
+    alreadyHaveAccount: "પહેલેથી એકાઉન્ટ છે?",
+    dontHaveAccount: "એકાઉન્ટ નથી?",
+
+    companyDetails: "કંપની વિગતો",
+    companyName: "કંપનીનું નામ",
+    phone: "ફોન નંબર",
+    address: "સરનામું",
+    city: "શહેર",
+    state: "રાજ્ય",
+    secretKey: "ગુપ્ત રજિસ્ટ્રેશન કી",
+    enterSecretKey: "તમારી ગુપ્ત કી દાખલ કરો",
+    secretKeyHelp: "ગુપ્ત રજિસ્ટ્રેશન કી માટે એડમિનનો સંપર્ક કરો",
+    companyCode: "કંપની કોડ",
+    companyCodeHelp: "6-અક્ષર કંપની કોડ માટે તમારા નોકરીદાતાને પૂછો",
+    shareCompanyCode: "તમારા કર્મચારીઓ સાથે આ કોડ શેર કરો",
+    shareCompanyCodeHelp: "તમારા સેલ્સમેન અને વિતરકોને રજિસ્ટર કરવા માટે આ કોડની જરૂર છે",
+  },
+  hi: {
+    // Common
+    selectLanguage: "भाषा चुनें",
+    selectRole: "अपनी भूमिका चुनें",
+    logout: "लॉगआउट",
+    submit: "सबमिट करें",
+    cancel: "रद्द करें",
+    loading: "लोડ हो रहा है...",
+
+    // Roles
+    salesman: "सेल्समैन",
+    distributor: "वितरक",
+    owner: "मालिक",
+
+    // Salesman
+    checkIn: "चेक-इन करें",
+    shopName: "दुकान का नाम",
+    mobileNo: "मोबाइल नंबर",
+    landmark: "स्थान चिन्ह",
+    takeSelfie: "दुकान की सेल्फी लें",
+    detectLocation: "दुकान का स्थान पता करें",
+    productAvailable: "क्या प्रोડक्ट उपलब्ध है?",
+    yes: "हाँ",
+    no: "नहीं",
+    actualProblem: "वास्तविक समस्या",
+    priceHigh: "कीमत ज्यादा है",
+    noSpace: "जगह नहीं है",
+    competitor: "प्रतियोगी से खुश",
+    other: "अन्य",
+    placeOrder: "ऑर्डर दें",
+    productName: "प्रोડक्ट का नाम",
+    quantity: "मात्रा",
+    visitSubmitted: "विज़िट सफलतापूर्वक सबमिट हुई",
+
+    // Distributor
+    orderQueue: "ऑर्डर कतार",
+    pendingOrders: "लंबित ऑर्डर",
+    call: "कॉल करें",
+    markDelivered: "डिलीવરी हो गई",
+    noOrders: "कोई लंबित ऑર्डर नहीं",
+    delivered: "डिलीवર हो गया",
+
+    // Owner
+    dashboard: "डैशबोर्ड",
+    mapView: "मानचित्र दृश्य",
+    analytics: "विश्लेषण",
+    exportData: "डेटा निर्यात करें",
+    clearRecords: "मासिक रिकॉर्ड साफ़ करें",
+    greenPins: "हरी पिन: प्रोડक्ट उपलब्ध",
+    redPins: "लाल पिन: प्रोડक्ट अस्वीकृत",
+    totalVisits: "कुल विज़िट",
+    productsStocked: "स्टॉक किए गए प्रोડक्ट",
+    rejections: "अस्वीकृतियाँ",
+
+    // Auth
+    login: "लॉगिन",
+    signUp: "साइन अप",
+    email: "ईमेल",
+    password: "पासवर्ड",
+    fullName: "पूरा नाम",
+    role: "भूमिका",
+    alreadyHaveAccount: "पहले से खाता है?",
+    dontHaveAccount: "खाता नहीं है?",
+
+    companyDetails: "कंपनी विवरण",
+    companyName: "कंपनी का नाम",
+    phone: "फोन नंबर",
+    address: "पता",
+    city: "शहर",
+    state: "राज्य",
+    secretKey: "गुप्त पंजीकरण कुंजी",
+    enterSecretKey: "अपनी गुप्त कुंजी दर्ज करें",
+    secretKeyHelp: "गुप्त पंजीकरण कुंजी के लिए एडमिन से संपर्क करें",
+    companyCode: "कंपनी कोड",
+    companyCodeHelp: "6-अक्षर कंपनी कोड के लिए अपने नियोक्ता से पूछें",
+    shareCompanyCode: "अपने कर्मचारियों के साथ यह कोड साझा करें",
+    shareCompanyCodeHelp: "आपके सेल्समैन और वितरक को पंजीकरण के लिए इस कोड की आवश्यकता है",
+  },
+}
+
+export function getTranslation(lang: Language, key: keyof typeof translations.en): string {
+  return translations[lang][key] || translations.en[key]
+}
