@@ -5,7 +5,13 @@ declare const self: ServiceWorkerGlobalScope
 const CACHE_NAME = "field-sales-v1"
 const OFFLINE_URL = "/offline"
 
-const STATIC_ASSETS = ["/", "/offline", "/icon-192.jpg", "/icon-512.jpg", "/manifest.json"]
+// ⚠️ DO NOT cache "/" for auth apps
+const STATIC_ASSETS = [
+  "/offline",
+  "/icon-192.jpg",
+  "/icon-512.jpg",
+  "/manifest.json",
+]
 
 // Install event - cache static assets
 self.addEventListener("install", (event) => {
@@ -33,26 +39,47 @@ self.addEventListener("activate", (event) => {
   self.clients.claim()
 })
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url)
+
+  // 🚫 NEVER handle navigation for auth or dashboard routes
+  if (
+    event.request.mode === "navigate" &&
+    (
+      url.pathname.startsWith("/auth") ||
+      url.pathname.startsWith("/distributor") ||
+      url.pathname.startsWith("/salesman") ||
+      url.pathname.startsWith("/owner")
+    )
+  ) {
+    // Let browser & Next.js handle it
+    return
+  }
+
+  // 🌐 Navigation fallback (offline only)
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match(OFFLINE_URL).then((response) => {
-          if (response) {
-            return response
-          }
-          return new Response("Offline", { status: 503, statusText: "Service Unavailable" })
-        })
-      }),
+      fetch(event.request).catch(() =>
+        caches.match(OFFLINE_URL).then(
+          (response) =>
+            response ??
+            new Response("Offline", {
+              status: 503,
+              statusText: "Service Unavailable",
+            }),
+        ),
+      ),
     )
-  } else {
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        return response || fetch(event.request)
-      }),
-    )
+    return
   }
+
+  // 📦 Static assets: cache-first
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request)
+    }),
+  )
 })
 
 export {}

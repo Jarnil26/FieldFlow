@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { LanguageSelector } from "@/components/language-selector"
 import { useLanguage } from "@/lib/language-context"
 import { UserCircle, Truck, Building2 } from "lucide-react"
@@ -11,28 +17,37 @@ import { UserCircle, Truck, Building2 } from "lucide-react"
 export default function Home() {
   const router = useRouter()
   const { t } = useLanguage()
-  const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function checkUser() {
+    const init = async () => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser()
+        data: { session },
+      } = await supabase.auth.getSession()
 
-      if (user) {
-        // Get user profile to determine role
-        const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-
-        if (profile?.role) {
-          router.push(`/${profile.role}`)
-          return
-        }
+      // 🚪 Not logged in → show home
+      if (!session?.user) {
+        setLoading(false)
+        return
       }
+
+      // 🔐 Logged in → redirect by role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single()
+
+      if (profile?.role) {
+        router.push(`/${profile.role}`)
+        return
+      }
+
       setLoading(false)
     }
 
-    checkUser()
+    init()
   }, [router, supabase])
 
   if (loading) {
@@ -51,7 +66,9 @@ export default function Home() {
 
       <div className="w-full max-w-4xl">
         <div className="mb-8 text-center">
-          <h1 className="mb-2 text-4xl font-bold text-gray-900">Field Sales Manager</h1>
+          <h1 className="mb-2 text-4xl font-bold text-gray-900">
+            Field Sales Manager
+          </h1>
           <p className="text-lg text-gray-600">{t("selectRole")}</p>
         </div>
 
@@ -66,10 +83,14 @@ export default function Home() {
                   <UserCircle className="h-12 w-12 text-blue-600" />
                 </div>
               </div>
-              <CardTitle className="text-center text-2xl">{t("salesman")}</CardTitle>
+              <CardTitle className="text-center text-2xl">
+                {t("salesman")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-center">Field visit tracking and order placement</CardDescription>
+              <CardDescription className="text-center">
+                Field visit tracking and order placement
+              </CardDescription>
             </CardContent>
           </Card>
 
@@ -83,10 +104,14 @@ export default function Home() {
                   <Truck className="h-12 w-12 text-green-600" />
                 </div>
               </div>
-              <CardTitle className="text-center text-2xl">{t("distributor")}</CardTitle>
+              <CardTitle className="text-center text-2xl">
+                {t("distributor")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-center">Order management and delivery tracking</CardDescription>
+              <CardDescription className="text-center">
+                Order management and delivery tracking
+              </CardDescription>
             </CardContent>
           </Card>
 
@@ -100,10 +125,14 @@ export default function Home() {
                   <Building2 className="h-12 w-12 text-purple-600" />
                 </div>
               </div>
-              <CardTitle className="text-center text-2xl">{t("owner")}</CardTitle>
+              <CardTitle className="text-center text-2xl">
+                {t("owner")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-center">Analytics dashboard and business insights</CardDescription>
+              <CardDescription className="text-center">
+                Analytics dashboard and business insights
+              </CardDescription>
             </CardContent>
           </Card>
         </div>
