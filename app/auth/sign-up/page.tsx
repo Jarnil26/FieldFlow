@@ -43,35 +43,33 @@ function SignUpForm() {
     setError(null)
 
     try {
+      // ================= OWNER VALIDATION =================
       if (role === "owner") {
-        const OWNER_SECRET_KEY = process.env.OWNER_SECRET_KEY || "FSM2025SECURE";
+        const OWNER_SECRET_KEY =
+          process.env.OWNER_SECRET_KEY || "FSM2025SECURE"
+
         if (secretKey !== OWNER_SECRET_KEY) {
-          throw new Error("Invalid secret key. Only authorized owners can register.")
+          throw new Error(
+            "Invalid secret key. Only authorized owners can register."
+          )
         }
 
         if (!companyName || !ownerPhone) {
-          throw new Error("Please fill in all required company details (name and phone)")
+          throw new Error(
+            "Please fill in all required company details (name and phone)"
+          )
         }
       }
 
+      // ================= SALESMAN / DISTRIBUTOR BASIC CHECK =================
       if (role === "salesman" || role === "distributor") {
         if (!companyCode || companyCode.length !== 6) {
           throw new Error("Please enter a valid 6-character company code")
         }
-
-        // Verify company code exists before signup
-        const { data: companyData, error: companyError } = await supabase
-          .from("companies")
-          .select("id")
-          .eq("company_code", companyCode.toUpperCase())
-          .single()
-
-        if (companyError || !companyData) {
-          throw new Error("Invalid company code. Please check with your employer.")
-        }
+        // ⛔ NO company verification here (intentionally removed)
       }
 
-      // Store setup data in user metadata to use after email verification
+      // ================= USER METADATA =================
       const metadata: Record<string, any> = {
         full_name: fullName,
         role: role,
@@ -86,30 +84,39 @@ function SignUpForm() {
       }
 
       if (role === "salesman" || role === "distributor") {
-        metadata.company_code = companyCode.toUpperCase()
+        metadata.company_code = companyCode.trim().toUpperCase()
       }
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/setup`,
-          data: metadata,
-        },
-      })
+      // ================= SUPABASE SIGNUP =================
+      const { data: authData, error: authError } =
+        await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo:
+              process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+              `${window.location.origin}/auth/setup`,
+            data: metadata,
+          },
+        })
 
       if (authError) throw authError
       if (!authData.user) throw new Error("Failed to create user")
 
-      // Success - redirect to check email page
+      // ================= SUCCESS =================
       router.push("/auth/sign-up-success")
     } catch (error: unknown) {
       console.error("[v0] Sign-up error:", error)
-      setError(error instanceof Error ? error.message : "An error occurred during sign up")
+      setError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred during sign up"
+      )
     } finally {
       setIsLoading(false)
     }
   }
+
 
   // Helper function to generate unique company code
   const generateCompanyCode = async (supabase: any): Promise<string> => {
