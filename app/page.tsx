@@ -27,24 +27,10 @@ export default function Home() {
         data: { session },
       } = await supabase.auth.getSession()
 
-<<<<<<< HEAD
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single()
-
-        if (profile?.role) {
-          router.push(`/${profile.role}`)
-          return
-        }
-=======
       // 🚪 Not logged in → show home
       if (!session?.user) {
         setLoading(false)
         return
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
       }
 
       // 🔐 Logged in → redirect by role
@@ -84,38 +70,12 @@ export default function Home() {
         <LanguageSelector />
       </div>
 
-<<<<<<< HEAD
-      <div className="z-10 w-full max-w-4xl">
-        {/* Logo + brand */}
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="max-w-xs sm:max-w-sm md:max-w-md w-full flex justify-center">
-            <Image
-              src="/logo/purohit-logo.png"
-              alt="Purohit Grow"
-              width={320}          // logical size in CSS pixels
-              height={160}
-              className="h-auto w-full max-w-[260px] sm:max-w-[320px] object-contain drop-shadow-lg"
-              priority
-            />
-          </div>
-
-          <h1 className="mt-4 mb-1 text-4xl font-extrabold tracking-tight text-white">
-            Purohit Grow
-          </h1>
-          <p className="text-lg font-medium text-[#FFCE00]">
-            પુરોહિત સાથે, વ્યવસાયનો વિશ્વાસુ વિકાસ
-          </p>
-          <p className="mt-2 text-sm text-white/80">
-            Smart field sales platform for distributors, owners, and sales teams.
-          </p>
-=======
       <div className="w-full max-w-4xl">
         <div className="mb-8 text-center">
           <h1 className="mb-2 text-4xl font-bold text-gray-900">
             Field Sales Manager
           </h1>
           <p className="text-lg text-gray-600">{t("selectRole")}</p>
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
         </div>
 
 
@@ -133,22 +93,13 @@ export default function Home() {
                   <UserCircle className="h-10 w-10 text-[#E31E24]" />
                 </div>
               </div>
-<<<<<<< HEAD
-              <CardTitle className="text-center text-xl text-[#E31E24]">
-=======
               <CardTitle className="text-center text-2xl">
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
                 {t("salesman")}
               </CardTitle>
             </CardHeader>
             <CardContent>
-<<<<<<< HEAD
-              <CardDescription className="text-center text-sm text-gray-700">
-                Shop visit capture, live location and order booking.
-=======
               <CardDescription className="text-center">
                 Field visit tracking and order placement
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
               </CardDescription>
             </CardContent>
           </Card>
@@ -164,22 +115,13 @@ export default function Home() {
                   <Truck className="h-10 w-10 text-[#FFCE00]" />
                 </div>
               </div>
-<<<<<<< HEAD
-              <CardTitle className="text-center text-xl text-[#E31E24]">
-=======
               <CardTitle className="text-center text-2xl">
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
                 {t("distributor")}
               </CardTitle>
             </CardHeader>
             <CardContent>
-<<<<<<< HEAD
-              <CardDescription className="text-center text-sm text-gray-700">
-                Manage orders, deliveries and stock fulfillment.
-=======
               <CardDescription className="text-center">
                 Order management and delivery tracking
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
               </CardDescription>
             </CardContent>
           </Card>
@@ -195,22 +137,13 @@ export default function Home() {
                   <Building2 className="h-10 w-10 text-[#E31E24]" />
                 </div>
               </div>
-<<<<<<< HEAD
-              <CardTitle className="text-center text-xl text-[#E31E24]">
-=======
               <CardTitle className="text-center text-2xl">
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
                 {t("owner")}
               </CardTitle>
             </CardHeader>
             <CardContent>
-<<<<<<< HEAD
-              <CardDescription className="text-center text-sm text-gray-700">
-                Attendance, visit analytics and performance insights.
-=======
               <CardDescription className="text-center">
                 Analytics dashboard and business insights
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
               </CardDescription>
             </CardContent>
           </Card>

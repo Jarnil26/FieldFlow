@@ -40,30 +40,15 @@ export default function DistributorPage() {
   useEffect(() => {
     const init = async () => {
       const {
-<<<<<<< HEAD
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-=======
         data: { session },
       } = await supabase.auth.getSession()
 
       if (!session?.user) {
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
         router.push("/auth/login?role=distributor")
         return
       }
 
-<<<<<<< HEAD
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("id", user.id)
-        .single()
-=======
       setUser(session.user)
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
 
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -85,25 +70,6 @@ export default function DistributorPage() {
       setCompanyId(profile.company_id)
       setLoading(false)
     }
-<<<<<<< HEAD
-
-    checkUser()
-  }, [router, supabase, toast])
-
-  // Fetch orders only after companyId is known
-  useEffect(() => {
-    if (!companyId || loading) return
-    fetchOrders()
-  }, [companyId, loading])
-
-  const fetchOrders = async () => {
-    if (!companyId) return
-
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-=======
 
     init()
   }, [router, supabase, toast])
@@ -129,7 +95,6 @@ export default function DistributorPage() {
               address,
               landmark
             )
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
           `
           )
           .eq("status", "pending")
@@ -241,22 +206,6 @@ export default function DistributorPage() {
         ) : (
           <div className="space-y-4">
             {orders.map((order) => (
-<<<<<<< HEAD
-              <Card
-                key={order.id}
-                className="overflow-hidden border border-green-100 bg-white shadow-sm"
-              >
-                {/* Top strip */}
-                <div className="flex items-center justify-between bg-gradient-to-r from-green-50 to-emerald-100 px-4 py-3">
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900">
-                      {order.shops.shop_name}
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => handleCall(order.shops.mobile_number)}
-                      className="mt-1 inline-flex items-center text-sm font-medium text-emerald-700 hover:text-emerald-800"
-=======
               <Card key={order.id} className="overflow-hidden">
                 <CardHeader className="bg-gradient-to-r from-green-100 to-teal-100 pb-4">
                   <div className="flex items-start justify-between">
@@ -274,48 +223,10 @@ export default function DistributorPage() {
                       onClick={() =>
                         handleCall(order.shops.mobile_number)
                       }
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
                     >
                       {order.shops.mobile_number}
-                    </button>
+                    </Button>
                   </div>
-<<<<<<< HEAD
-
-                  <Button
-                    size="sm"
-                    className="rounded-full bg-emerald-600 px-4 text-sm font-semibold hover:bg-emerald-700"
-                    onClick={() => handleCall(order.shops.mobile_number)}
-                  >
-                    <Phone className="mr-2 h-4 w-4" />
-                    {t("call")}
-                  </Button>
-                </div>
-
-                {/* Middle content */}
-                <CardContent className="space-y-3 px-4 pt-4 pb-3">
-                  <div className="flex items-start gap-2">
-                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {order.shops.address}
-                      </p>
-                      {order.shops.landmark && (
-                        <p className="text-xs text-gray-500">{order.shops.landmark}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Package className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {order.product_name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Qty: {order.quantity}
-                      </p>
-                    </div>
-=======
                 </CardHeader>
 
                 <CardContent className="pt-4">
@@ -348,7 +259,6 @@ export default function DistributorPage() {
                       <CheckCircle2 className="mr-2 h-5 w-5" />
                       {t("markDelivered")}
                     </Button>
->>>>>>> c2f8073371607b5af71d49304ed90f845bb2c2be
                   </div>
                 </CardContent>
 
