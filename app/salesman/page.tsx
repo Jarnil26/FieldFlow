@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -11,8 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LanguageSelector } from "@/components/language-selector"
 import { useLanguage } from "@/lib/language-context"
-import { Camera, MapPin, LogOut, Plus, Minus } from "lucide-react"
+import { Camera, MapPin, LogOut, Plus, Minus, Menu, ShoppingCart, ChevronDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 export default function SalesmanPage() {
   const router = useRouter()
@@ -24,6 +27,10 @@ export default function SalesmanPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [todayVisits, setTodayVisits] = useState(0)
+
+  // login_sessions row id
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   // Form fields
   const [shopName, setShopName] = useState("")
@@ -35,23 +42,124 @@ export default function SalesmanPage() {
   const [selfieUrl, setSelfieUrl] = useState("")
   const [productAvailable, setProductAvailable] = useState<boolean | null>(null)
   const [problemType, setProblemType] = useState("")
-  const [productName, setProductName] = useState("")
-  const [quantity, setQuantity] = useState(1)
 
+  // Product catalog states
+  const [catalogExpanded, setCatalogExpanded] = useState(false)
+  const [newProductsExpanded, setNewProductsExpanded] = useState(false)
+
+  // AVAILABLE products -> only boolean selection
+  const [availableProducts, setAvailableProducts] = useState<any[]>([])
+  const [selectedAvailableProducts, setSelectedAvailableProducts] = useState<{ [key: string]: boolean }>({})
+
+  // NEW products -> selection + quantity
+  const [newProducts, setNewProducts] = useState<any[]>([])
+  const [selectedNewProducts, setSelectedNewProducts] = useState<{ [key: string]: number }>({})
+
+  const [loadingProducts, setLoadingProducts] = useState(false)
+
+  /* --------- SESSION HELPERS (login_sessions table) --------- */
+
+  const startSession = async (userId: string, companyId: string) => {
+  try {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    // Try to find an open session for today
+    const { data: existing, error: selectError } = await supabase
+      .from("login_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("company_id", companyId)
+      .is("logout_at", null)
+      .gte("login_at", today.toISOString())
+      .lt("login_at", tomorrow.toISOString())
+      .maybeSingle() // <- important
+
+    // If a row exists, reuse it
+    if (existing && !selectError) {
+      setSessionId(existing.id)
+      return
+    }
+
+    // Otherwise create a new row
+    const { data: inserted, error: insertError } = await supabase
+      .from("login_sessions")
+      .insert({
+        user_id: userId,
+        company_id: companyId,
+        login_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single()
+
+    if (insertError) throw insertError
+    setSessionId(inserted.id)
+  } catch (err) {
+    console.error("startSession error", err)
+  }
+}
+
+
+  const endSession = async () => {
+    if (!sessionId) return
+    try {
+      const logoutAt = new Date()
+      const { data, error } = await supabase
+        .from("login_sessions")
+        .update({ logout_at: logoutAt.toISOString() })
+        .eq("id", sessionId)
+        .select("login_at")
+        .single()
+
+      if (!error && data?.login_at) {
+        const loginAt = new Date(data.login_at)
+        const durationMinutes = Math.round(
+          (logoutAt.getTime() - loginAt.getTime()) / 60000,
+        )
+        await supabase
+          .from("login_sessions")
+          .update({ duration_minutes: durationMinutes })
+          .eq("id", sessionId)
+      }
+    } catch (err) {
+      console.error("Failed to end session", err)
+    } finally {
+      setSessionId(null)
+    }
+  }
+
+  const forceLogout = async (reason: string) => {
+    toast({
+      title: "Session ended",
+      description: reason,
+    })
+    await endSession()
+    await supabase.auth.signOut()
+    router.push("/auth/login?role=salesman")
+  }
+
+  /* -------------------- INIT: AUTH + PROFILE -------------------- */
   useEffect(() => {
-    async function checkUser() {
+    async function init() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
+
       if (!user) {
         router.push("/auth/login?role=salesman")
         return
       }
       setUser(user)
 
-      const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single()
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", user.id)
+        .single()
 
-      if (!profile?.company_id) {
+      if (profileError || !profile?.company_id) {
         toast({
           title: "Error",
           description: "No company assigned. Please contact your employer.",
@@ -63,16 +171,146 @@ export default function SalesmanPage() {
       }
 
       setCompanyId(profile.company_id)
+      await loadTodayVisits(user.id)
+
+      // create login_sessions row
+      await startSession(user.id, profile.company_id)
+
       setLoading(false)
     }
-    checkUser()
-  }, [router, supabase])
+
+    init()
+  }, [router, supabase, toast])
+
+  /* -------- AUTO-LOGOUT: midnight + no movement 20 min -------- */
+  useEffect(() => {
+    if (!user) return
+
+    // 1) Auto-logout at next midnight
+    const now = new Date()
+    const nextMidnight = new Date()
+    nextMidnight.setHours(24, 0, 0, 0)
+    const msUntilMidnight = nextMidnight.getTime() - now.getTime()
+
+    const midnightTimeout = window.setTimeout(() => {
+      forceLogout("Auto-logout at midnight.")
+    }, msUntilMidnight)
+
+    // 2) Auto-logout if no movement for 20 minutes
+    let watchId: number | null = null
+    let lastMoveTime = Date.now()
+    let lastCoords: { lat: number; lon: number } | null = null
+
+    const MOVEMENT_THRESHOLD_METERS = 50
+    const MAX_IDLE_MS = 20 * 60 * 1000
+
+    const toRad = (v: number) => (v * Math.PI) / 180
+    const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371000
+      const dLat = toRad(lat2 - lat1)
+      const dLon = toRad(lon2 - lon1)
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+      return R * c
+    }
+
+    if ("geolocation" in navigator) {
+      const success = (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude
+        const lon = pos.coords.longitude
+
+        if (!lastCoords) {
+          lastCoords = { lat, lon }
+          lastMoveTime = Date.now()
+          return
+        }
+
+        const d = distanceMeters(lastCoords.lat, lastCoords.lon, lat, lon)
+        if (d >= MOVEMENT_THRESHOLD_METERS) {
+          lastCoords = { lat, lon }
+          lastMoveTime = Date.now()
+        }
+      }
+
+      const error = (err: GeolocationPositionError) => {
+        console.warn("watchPosition error", err)
+      }
+
+      watchId = navigator.geolocation.watchPosition(success, error, {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 30000,
+      })
+    }
+
+    const idleInterval = window.setInterval(() => {
+      if (Date.now() - lastMoveTime > MAX_IDLE_MS) {
+        forceLogout("No movement detected for 20 minutes.")
+        if (watchId != null) navigator.geolocation.clearWatch(watchId)
+        window.clearInterval(idleInterval)
+        window.clearTimeout(midnightTimeout)
+      }
+    }, 60_000)
+
+    return () => {
+      window.clearTimeout(midnightTimeout)
+      window.clearInterval(idleInterval)
+      if (watchId != null) navigator.geolocation.clearWatch(watchId)
+    }
+  }, [user])
+
+  /* -------------------- LOAD PRODUCTS WHEN companyId READY -------------------- */
+  useEffect(() => {
+    if (!companyId) return
+    loadAllProducts()
+  }, [companyId])
+
+  const loadTodayVisits = async (userId: string) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const { count } = await supabase
+      .from("shops")
+      .select("*", { count: "exact", head: true })
+      .eq("created_by", userId)
+      .gte("created_at", today.toISOString())
+      .lt("created_at", tomorrow.toISOString())
+
+    setTodayVisits(count || 0)
+  }
+
+  const loadAllProducts = async () => {
+    if (!companyId) return
+    setLoadingProducts(true)
+    try {
+      const { data: allProducts, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("name")
+
+      if (error) console.error("loadAllProducts error", error)
+
+      setAvailableProducts(allProducts || [])
+      setNewProducts(allProducts || [])
+    } catch (err) {
+      console.error("Failed to load products:", err)
+    } finally {
+      setLoadingProducts(false)
+    }
+  }
 
   const handleLogout = async () => {
+    await endSession()
     await supabase.auth.signOut()
     router.push("/")
   }
 
+  /* -------------------- LOCATION: BEST-EFFORT + MANUAL CORRECTION -------------------- */
   const detectLocation = () => {
     if (!navigator.geolocation) {
       toast({
@@ -90,37 +328,56 @@ export default function SalesmanPage() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        setLatitude(position.coords.latitude)
-        setLongitude(position.coords.longitude)
+        const { latitude: lat, longitude: lon } = position.coords
 
-        // Reverse geocode to get address
+        setLatitude(lat)
+        setLongitude(lon)
+
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
           )
           const data = await response.json()
-          const simpleAddress = `${data.address.suburb || data.address.neighbourhood || ""}, ${data.address.city || data.address.town || ""}`
-          setAddress(simpleAddress.trim())
+
+          const road = data.address.road || ""
+          const area =
+            data.address.suburb ||
+            data.address.neighbourhood ||
+            data.address.village ||
+            ""
+          const city =
+            data.address.city ||
+            data.address.town ||
+            data.address.municipality ||
+            data.address.state_district ||
+            ""
+
+          const simpleAddress = [road, area, city].filter(Boolean).join(", ")
+
+          setAddress(simpleAddress || "Location detected")
           toast({
             title: "Location detected",
-            description: simpleAddress,
+            description: simpleAddress || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
           })
         } catch (error) {
           setAddress("Location detected")
           toast({
             title: "Location detected",
-            description: "Coordinates saved",
+            description: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
           })
         }
       },
       (error) => {
         let errorMessage = "Unable to detect location. Please enable GPS."
         if (error.code === error.PERMISSION_DENIED) {
-          errorMessage = "Location permission denied. Please enable location access in your browser settings."
+          errorMessage =
+            "Location permission denied. Please enable location access in your browser settings."
         } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMessage = "Location information is unavailable. Please check your GPS settings."
+          errorMessage =
+            "Location information is unavailable. Please check your GPS / network."
         } else if (error.code === error.TIMEOUT) {
-          errorMessage = "Location request timed out. Please try again."
+          errorMessage =
+            "Location request timed out. Please move near a window and try again, or enter address manually."
         }
         toast({
           title: "Error",
@@ -130,8 +387,8 @@ export default function SalesmanPage() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        timeout: 20000,
+        maximumAge: 30000,
       },
     )
   }
@@ -151,24 +408,30 @@ export default function SalesmanPage() {
     }
   }
 
+  const updateNewProductQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      const newState = { ...selectedNewProducts }
+      delete newState[productId]
+      setSelectedNewProducts(newState)
+    } else {
+      setSelectedNewProducts({ ...selectedNewProducts, [productId]: quantity })
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!latitude || !longitude) {
       toast({
         title: "Error",
-        description: "Please detect location first",
+        description: "Please detect location first or enter coordinates manually",
         variant: "destructive",
       })
       return
     }
 
     if (!selfieUrl) {
-      toast({
-        title: "Error",
-        description: "Please take a shop selfie",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Please take a shop selfie", variant: "destructive" })
       return
     }
 
@@ -185,15 +448,6 @@ export default function SalesmanPage() {
       toast({
         title: "Error",
         description: "Please select the problem type",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (productAvailable && !productName) {
-      toast({
-        title: "Error",
-        description: "Please enter product name for order",
         variant: "destructive",
       })
       return
@@ -222,22 +476,44 @@ export default function SalesmanPage() {
 
       if (shopError) throw shopError
 
-      if (productAvailable && productName) {
-        const { error: orderError } = await supabase.from("orders").insert({
+      // AVAILABLE products -> present (qty 1)
+      if (productAvailable) {
+        const selectedIds = Object.keys(selectedAvailableProducts).filter(
+          (id) => selectedAvailableProducts[id],
+        )
+
+        for (const product_id of selectedIds) {
+          const product = availableProducts.find((p) => p.id === product_id)
+          if (!product) continue
+
+          await supabase.from("orders").insert({
+            shop_id: shopData.id,
+            product_name: product.name,
+            quantity: 1,
+            status: "pending",
+            created_by: user.id,
+            company_id: companyId,
+          })
+        }
+      }
+
+      // NEW products -> quantity
+      for (const [product_id, quantity] of Object.entries(selectedNewProducts)) {
+        if (!quantity || quantity <= 0) continue
+        const product = newProducts.find((p) => p.id === product_id)
+        if (!product) continue
+
+        await supabase.from("orders").insert({
           shop_id: shopData.id,
-          product_name: productName,
+          product_name: product.name,
           quantity,
+          status: "pending",
           created_by: user.id,
           company_id: companyId,
         })
-
-        if (orderError) throw orderError
       }
 
-      toast({
-        title: t("visitSubmitted"),
-        description: "Visit recorded successfully",
-      })
+      toast({ title: t("visitSubmitted"), description: "Visit recorded successfully" })
 
       setShopName("")
       setMobileNo("")
@@ -248,8 +524,11 @@ export default function SalesmanPage() {
       setSelfieUrl("")
       setProductAvailable(null)
       setProblemType("")
-      setProductName("")
-      setQuantity(1)
+      setSelectedAvailableProducts({})
+      setSelectedNewProducts({})
+      setCatalogExpanded(false)
+      setNewProductsExpanded(false)
+      await loadTodayVisits(user.id)
     } catch (error: any) {
       toast({
         title: "Error",
@@ -275,6 +554,9 @@ export default function SalesmanPage() {
         <div className="flex items-center justify-between p-4">
           <h1 className="text-2xl font-bold text-gray-900">{t("salesman")}</h1>
           <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-sm">
+              Today: {todayVisits} visits
+            </Badge>
             <LanguageSelector />
             <Button variant="outline" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
@@ -290,7 +572,7 @@ export default function SalesmanPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Shop Details */}
+              {/* Shop details */}
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="shopName" className="text-base">
@@ -305,7 +587,6 @@ export default function SalesmanPage() {
                     className="mt-2 h-12 text-base"
                   />
                 </div>
-
                 <div>
                   <Label htmlFor="mobileNo" className="text-base">
                     {t("mobileNo")}
@@ -319,7 +600,6 @@ export default function SalesmanPage() {
                     className="mt-2 h-12 text-base"
                   />
                 </div>
-
                 <div>
                   <Label htmlFor="landmark" className="text-base">
                     {t("landmark")}
@@ -334,7 +614,7 @@ export default function SalesmanPage() {
                 </div>
               </div>
 
-              {/* Location Detection */}
+              {/* Location button + coordinates preview */}
               <div>
                 <Button
                   type="button"
@@ -346,19 +626,36 @@ export default function SalesmanPage() {
                   <MapPin className="mr-2 h-5 w-5" />
                   {latitude ? address || "Location Detected" : t("detectLocation")}
                 </Button>
+                {latitude && longitude && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Detected: {latitude.toFixed(5)}, {longitude.toFixed(5)} (edit address if this
+                    seems wrong)
+                  </p>
+                )}
               </div>
 
-              {/* Photo Capture */}
+              {/* Address editable */}
+              <div>
+                <Label htmlFor="address" className="text-base">
+                  Address (editable)
+                </Label>
+                <Input
+                  id="address"
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="mt-2 h-12 text-base"
+                  placeholder="Edit if auto-detected address is wrong"
+                />
+              </div>
+
+              {/* Photo */}
               <div>
                 <Label className="text-base">{t("takeSelfie")}</Label>
                 <div className="mt-2">
                   {selfieUrl ? (
                     <div className="relative">
-                      <img
-                        src={selfieUrl || "/placeholder.svg"}
-                        alt="Shop"
-                        className="h-48 w-full rounded-lg object-cover"
-                      />
+                      <img src={selfieUrl} alt="Shop" className="h-48 w-full rounded-lg object-cover" />
                       <Button
                         type="button"
                         variant="secondary"
@@ -391,7 +688,7 @@ export default function SalesmanPage() {
                 </div>
               </div>
 
-              {/* Product Availability */}
+              {/* Product availability */}
               <div>
                 <Label className="mb-3 block text-base">{t("productAvailable")}</Label>
                 <div className="grid grid-cols-2 gap-4">
@@ -411,7 +708,10 @@ export default function SalesmanPage() {
                     variant={productAvailable === false ? "destructive" : "outline"}
                     onClick={() => {
                       setProductAvailable(false)
-                      setProductName("")
+                      setSelectedAvailableProducts({})
+                      setSelectedNewProducts({})
+                      setCatalogExpanded(false)
+                      setNewProductsExpanded(false)
                     }}
                     className="h-14 text-base"
                   >
@@ -420,7 +720,6 @@ export default function SalesmanPage() {
                 </div>
               </div>
 
-              {/* If Product Not Available - Problem Selection */}
               {productAvailable === false && (
                 <div>
                   <Label className="mb-3 block text-base">{t("actualProblem")}</Label>
@@ -461,47 +760,182 @@ export default function SalesmanPage() {
                 </div>
               )}
 
-              {/* If Product Available - Place Order */}
               {productAvailable === true && (
-                <div className="space-y-4 rounded-lg border bg-green-50 p-4">
-                  <Label className="text-base font-semibold">{t("placeOrder")}</Label>
-                  <div>
-                    <Label htmlFor="productName" className="text-sm">
-                      {t("productName")}
-                    </Label>
-                    <Input
-                      id="productName"
-                      type="text"
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      className="mt-2 h-12"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("quantity")}</Label>
-                    <div className="mt-2 flex items-center gap-4">
+                <>
+                  {/* AVAILABLE PRODUCTS */}
+                  <Collapsible open={catalogExpanded} onOpenChange={setCatalogExpanded}>
+                    <CollapsibleTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="h-12 w-12"
+                        className="h-14 w-full justify-start text-base"
                       >
-                        <Minus className="h-4 w-4" />
+                        <Menu className="mr-2 h-5 w-5" /> Available Products (
+                        {availableProducts.length})
+                        <ChevronDown
+                          className={`ml-auto h-4 w-4 transition-transform ${
+                            catalogExpanded ? "rotate-180" : ""
+                          }`}
+                        />
                       </Button>
-                      <span className="min-w-[3rem] text-center text-2xl font-semibold">{quantity}</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-4 mt-2">
+                      <ScrollArea className="h-40 rounded-md border p-2">
+                        {loadingProducts ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            Loading...
+                          </p>
+                        ) : availableProducts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            No available products
+                          </p>
+                        ) : (
+                          availableProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50 rounded"
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <Checkbox
+                                  id={`avail-${product.id}`}
+                                  checked={!!selectedAvailableProducts[product.id]}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedAvailableProducts({
+                                      ...selectedAvailableProducts,
+                                      [product.id]: !!checked,
+                                    })
+                                  }}
+                                />
+                                <div className="flex items-center gap-3">
+                                  {product.image_url && (
+                                    <img
+                                      src={product.image_url}
+                                      alt={product.name}
+                                      className="h-10 w-10 rounded object-cover border"
+                                    />
+                                  )}
+                                  <p className="font-medium text-sm">{product.name}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* NEW PRODUCTS */}
+                  <Collapsible
+                    open={newProductsExpanded}
+                    onOpenChange={setNewProductsExpanded}
+                    className="mt-4"
+                  >
+                    <CollapsibleTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="h-12 w-12"
+                        className="h-14 w-full justify-start text-base"
                       >
-                        <Plus className="h-4 w-4" />
+                        <ShoppingCart className="mr-2 h-5 w-5" /> New Products to Offer (
+                        {newProducts.length})
+                        {Object.keys(selectedNewProducts).length > 0 && (
+                          <Badge className="ml-2 h-6 px-2">
+                            {Object.keys(selectedNewProducts).length}
+                          </Badge>
+                        )}
+                        <ChevronDown
+                          className={`ml-auto h-4 w-4 transition-transform ${
+                            newProductsExpanded ? "rotate-180" : ""
+                          }`}
+                        />
                       </Button>
-                    </div>
-                  </div>
-                </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-4 mt-2">
+                      <ScrollArea className="h-40 rounded-md border p-2">
+                        {loadingProducts ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            Loading...
+                          </p>
+                        ) : newProducts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            No new products to offer
+                          </p>
+                        ) : (
+                          newProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-yellow-50 rounded"
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <Checkbox
+                                  id={`new-${product.id}`}
+                                  checked={selectedNewProducts[product.id] != null}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      updateNewProductQuantity(product.id, 1)
+                                    } else {
+                                      updateNewProductQuantity(product.id, 0)
+                                    }
+                                  }}
+                                />
+                                <div className="flex items-center gap-3">
+                                  {product.image_url && (
+                                    <img
+                                      src={product.image_url}
+                                      alt={product.name}
+                                      className="h-10 w-10 rounded object-cover border"
+                                    />
+                                  )}
+                                  <div>
+                                    <p className="font-medium text-sm">{product.name}</p>
+                                    <p className="text-xs text-muted-foreground bg-yellow-100 px-2 py-1 rounded-full">
+                                      New Product
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              {selectedNewProducts[product.id] && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      updateNewProductQuantity(
+                                        product.id,
+                                        (selectedNewProducts[product.id] || 0) - 1,
+                                      )
+                                    }
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="w-10 text-center font-semibold text-sm">
+                                    {selectedNewProducts[product.id]}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      updateNewProductQuantity(
+                                        product.id,
+                                        (selectedNewProducts[product.id] || 0) + 1,
+                                      )
+                                    }
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </>
               )}
 
               <Button type="submit" disabled={submitting} className="h-14 w-full text-lg">

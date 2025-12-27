@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next"
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "FieldFlow",
-    short_name: "FieldFlow",
+    name: "Purohit Grow",
+    short_name: "Purohit Grow",
     description:
       "Mobile-first field sales management app with GPS tracking, visit analytics, and real-time reporting",
 

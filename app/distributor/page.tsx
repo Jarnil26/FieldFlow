@@ -41,13 +41,18 @@ export default function DistributorPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
+
       if (!user) {
         router.push("/auth/login?role=distributor")
         return
       }
       setUser(user)
 
-      const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single()
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", user.id)
+        .single()
 
       if (!profile?.company_id) {
         toast({
@@ -62,12 +67,20 @@ export default function DistributorPage() {
 
       setCompanyId(profile.company_id)
       setLoading(false)
-      fetchOrders()
     }
+
     checkUser()
-  }, [router, supabase])
+  }, [router, supabase, toast])
+
+  // Fetch orders only after companyId is known
+  useEffect(() => {
+    if (!companyId || loading) return
+    fetchOrders()
+  }, [companyId, loading])
 
   const fetchOrders = async () => {
+    if (!companyId) return
+
     try {
       const { data, error } = await supabase
         .from("orders")
@@ -182,53 +195,75 @@ export default function DistributorPage() {
         ) : (
           <div className="space-y-4">
             {orders.map((order) => (
-              <Card key={order.id} className="overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-green-100 to-teal-100 pb-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{order.shops.shop_name}</CardTitle>
-                      <p className="mt-1 text-sm text-gray-600">{order.shops.mobile_number}</p>
-                    </div>
-                    <Button
-                      size="lg"
-                      className="h-14 bg-green-600 hover:bg-green-700"
+              <Card
+                key={order.id}
+                className="overflow-hidden border border-green-100 bg-white shadow-sm"
+              >
+                {/* Top strip */}
+                <div className="flex items-center justify-between bg-gradient-to-r from-green-50 to-emerald-100 px-4 py-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900">
+                      {order.shops.shop_name}
+                    </h2>
+                    <button
+                      type="button"
                       onClick={() => handleCall(order.shops.mobile_number)}
+                      className="mt-1 inline-flex items-center text-sm font-medium text-emerald-700 hover:text-emerald-800"
                     >
-                      <Phone className="mr-2 h-5 w-5" />
-                      {t("call")}
-                    </Button>
+                      {order.shops.mobile_number}
+                    </button>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="mt-1 h-5 w-5 flex-shrink-0 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{order.shops.address}</p>
-                        {order.shops.landmark && <p className="text-sm text-gray-600">{order.shops.landmark}</p>}
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <Package className="h-5 w-5 flex-shrink-0 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {order.product_name} × {order.quantity}
-                        </p>
-                      </div>
-                    </div>
+                  <Button
+                    size="sm"
+                    className="rounded-full bg-emerald-600 px-4 text-sm font-semibold hover:bg-emerald-700"
+                    onClick={() => handleCall(order.shops.mobile_number)}
+                  >
+                    <Phone className="mr-2 h-4 w-4" />
+                    {t("call")}
+                  </Button>
+                </div>
 
-                    <Button
-                      className="mt-4 h-14 w-full bg-blue-600 text-base hover:bg-blue-700"
-                      onClick={() => handleMarkDelivered(order.id)}
-                    >
-                      <CheckCircle2 className="mr-2 h-5 w-5" />
-                      {t("markDelivered")}
-                    </Button>
+                {/* Middle content */}
+                <CardContent className="space-y-3 px-4 pt-4 pb-3">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {order.shops.address}
+                      </p>
+                      {order.shops.landmark && (
+                        <p className="text-xs text-gray-500">{order.shops.landmark}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Package className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {order.product_name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Qty: {order.quantity}
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
+
+                {/* Bottom CTA */}
+                <div className="border-t bg-blue-600 px-4 py-3">
+                  <Button
+                    className="flex w-full items-center justify-center gap-2 bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+                    onClick={() => handleMarkDelivered(order.id)}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {t("markDelivered")}
+                  </Button>
+                </div>
               </Card>
             ))}
+
           </div>
         )}
       </div>

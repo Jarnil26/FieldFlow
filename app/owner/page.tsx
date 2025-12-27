@@ -12,6 +12,15 @@ import { useLanguage } from "@/lib/language-context"
 import { LogOut, MapIcon, BarChart3, Download, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import dynamic from "next/dynamic"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 const MapView = dynamic(() => import("@/components/map-view"), { ssr: false })
 
@@ -29,6 +38,15 @@ interface Shop {
   selfie_url?: string
 }
 
+interface SessionRow {
+  id: string
+  user_id: string
+  name: string | null
+  login_at: string
+  logout_at: string | null
+  duration_minutes: number | null
+}
+
 export default function OwnerPage() {
   const router = useRouter()
   const { t } = useLanguage()
@@ -44,6 +62,15 @@ export default function OwnerPage() {
     productsStocked: 0,
     rejections: 0,
   })
+
+  // login_sessions table
+  const [sessions, setSessions] = useState<SessionRow[]>([])
+
+  // add‑product dialog state
+  const [addOpen, setAddOpen] = useState(false)
+  const [newProductName, setNewProductName] = useState("")
+  const [newProductFile, setNewProductFile] = useState<File | null>(null)
+  const [addingProduct, setAddingProduct] = useState(false)
 
   /* -------------------- AUTH + COMPANY -------------------- */
   useEffect(() => {
@@ -83,18 +110,17 @@ export default function OwnerPage() {
     init()
   }, [router, supabase, toast])
 
-  /* -------------------- FETCH SHOPS (SAFE) -------------------- */
+  /* -------------------- FETCH SHOPS & SESSIONS -------------------- */
   useEffect(() => {
     if (!company?.id) return
     fetchData(company.id)
+    fetchSessions(company.id)
   }, [company])
 
   const fetchData = async (companyId: string) => {
     if (!companyId) return
 
     try {
-      console.log("Fetching shops for company:", companyId)
-
       const { data: shopsData, error } = await supabase
         .from("shops")
         .select("*")
@@ -119,6 +145,61 @@ export default function OwnerPage() {
       })
     }
   }
+
+  const fetchSessions = async (companyId: string) => {
+  try {
+    // 1) get sessions for this company
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("login_sessions")
+      .select("id, user_id, login_at, logout_at, duration_minutes")
+      .eq("company_id", companyId)
+      .order("login_at", { ascending: false })
+
+    if (sessionError) throw sessionError
+    const sessionsList = sessionData || []
+
+    if (sessionsList.length === 0) {
+      setSessions([])
+      return
+    }
+
+    // 2) fetch full_name for all distinct user_ids
+    const userIds = Array.from(new Set(sessionsList.map((s: any) => s.user_id)))
+
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", userIds)
+
+    if (profilesError) throw profilesError
+
+    const nameMap = new Map<string, string | null>()
+    ;(profilesData || []).forEach((p: any) => {
+      nameMap.set(p.id, p.full_name ?? null)
+    })
+
+    // 3) map into SessionRow
+    const mapped: SessionRow[] = sessionsList.map((row: any) => ({
+      id: row.id,
+      user_id: row.user_id,
+      name: nameMap.get(row.user_id) ?? null,
+      login_at: row.login_at,
+      logout_at: row.logout_at,
+      duration_minutes: row.duration_minutes,
+    }))
+
+    setSessions(mapped)
+  } catch (err: any) {
+    console.error("fetchSessions error", err)
+    toast({
+      title: "Error",
+      description: err?.message || "Failed to load sessions",
+      variant: "destructive",
+    })
+  }
+}
+
+
 
   /* -------------------- ACTIONS -------------------- */
   const handleLogout = async () => {
@@ -183,6 +264,77 @@ export default function OwnerPage() {
     }
   }
 
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!company?.id) return
+
+    if (!newProductName.trim()) {
+      toast({
+        title: "Name required",
+        description: "Please enter product name",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!newProductFile) {
+      toast({
+        title: "Image required",
+        description: "Please select a packet image",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setAddingProduct(true)
+    try {
+      const bucket = "product-images"
+
+      const fileExt = newProductFile.name.split(".").pop() || "jpg"
+      const filePath = `${company.id}/${Date.now()}.${fileExt}`
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, newProductFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: newProductFile.type || "image/jpeg",
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath)
+      const imageUrl = urlData?.publicUrl
+
+      const { error: insertError } = await supabase.from("products").insert({
+        company_id: company.id,
+        name: newProductName.trim(),
+        image_url: imageUrl,
+        status: "active",
+      })
+
+      if (insertError) throw insertError
+
+      toast({
+        title: "Product added",
+        description: "Product created successfully",
+      })
+
+      setNewProductName("")
+      setNewProductFile(null)
+      setAddOpen(false)
+    } catch (err: any) {
+      console.error("UPLOAD DEBUG ERROR", err)
+      toast({
+        title: "Error",
+        description: err.message || "Failed to add product",
+        variant: "destructive",
+      })
+    } finally {
+      setAddingProduct(false)
+    }
+  }
+
   /* -------------------- UI -------------------- */
   if (loading) {
     return (
@@ -223,13 +375,55 @@ export default function OwnerPage() {
         </div>
 
         {/* Actions */}
-        <div className="mb-6 flex gap-3">
+        <div className="mb-6 flex flex-wrap gap-3">
           <Button onClick={exportToCSV}>
             <Download className="mr-2 h-4 w-4" /> {t("exportData")}
           </Button>
           <Button variant="destructive" onClick={clearRecords}>
             <Trash2 className="mr-2 h-4 w-4" /> {t("clearRecords")}
           </Button>
+
+          {/* Add Product dialog */}
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">+ Add Product</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Product</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddProduct} className="space-y-4">
+                <div>
+                  <Label htmlFor="productName">Product Name</Label>
+                  <Input
+                    id="productName"
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                    placeholder="Balaji Tomato Twist ₹10"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="productImage">Product Image</Label>
+                  <Input
+                    id="productImage"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setNewProductFile(file)
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Image will be uploaded to Supabase Storage bucket <code>product-images</code>.
+                  </p>
+                </div>
+                <Button type="submit" disabled={addingProduct} className="w-full">
+                  {addingProduct ? "Saving..." : "Save Product"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Tabs */}
@@ -257,7 +451,67 @@ export default function OwnerPage() {
                 <CardTitle>{t("analytics")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-8">
+                  {/* Work time table */}
+                  <div>
+                    <h3 className="mb-3 text-lg font-semibold">Salesman Work Time</h3>
+                    {sessions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No sessions recorded yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Name</th>
+                              <th className="px-3 py-2 text-left">Date</th>
+                              <th className="px-3 py-2 text-left">Login</th>
+                              <th className="px-3 py-2 text-left">Logout</th>
+                              <th className="px-3 py-2 text-left">Total (min)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sessions.map((s) => {
+                              const login = new Date(s.login_at)
+                              const logout = s.logout_at ? new Date(s.logout_at) : null
+                              const dateStr = login.toLocaleDateString()
+                              const loginStr = login.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                              const logoutStr = logout
+                                ? logout.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                                : "-"
+                              const mins =
+                                s.duration_minutes ??
+                                (logout
+                                  ? Math.round(
+                                    (logout.getTime() - login.getTime()) / 60000,
+                                  )
+                                  : null)
+
+                              return (
+                                <tr key={s.id} className="border-t">
+                                  <td className="px-3 py-2">
+                                    {s.name ?? s.user_id.slice(0, 6)}
+                                  </td>
+
+                                  <td className="px-3 py-2">{dateStr}</td>
+                                  <td className="px-3 py-2">{loginStr}</td>
+                                  <td className="px-3 py-2">{logoutStr}</td>
+                                  <td className="px-3 py-2">
+                                    {mins != null ? mins : "-"}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Problem Analysis */}
                   <div>
@@ -293,9 +547,7 @@ export default function OwnerPage() {
                               <p className="font-semibold">{shop.shop_name}</p>
                               <p className="text-sm text-gray-600">{shop.address}</p>
                             </div>
-                            <Badge
-                              variant={shop.product_available ? "default" : "destructive"}
-                            >
+                            <Badge variant={shop.product_available ? "default" : "destructive"}>
                               {shop.product_available ? "Stocked" : "Rejected"}
                             </Badge>
                           </div>
@@ -311,12 +563,10 @@ export default function OwnerPage() {
                       ))}
                     </div>
                   </div>
-
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
-
         </Tabs>
       </div>
     </div>
