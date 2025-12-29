@@ -17,6 +17,7 @@ interface Order {
   quantity: number
   status: string
   created_at: string
+  distributor_id: string
   shops: {
     shop_name: string
     mobile_number: string
@@ -36,7 +37,7 @@ export default function DistributorPage() {
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<Order[]>([])
 
-  // 🔐 AUTH + PROFILE CHECK (FIXED)
+  // AUTH + PROFILE
   useEffect(() => {
     const init = async () => {
       const {
@@ -74,9 +75,9 @@ export default function DistributorPage() {
     init()
   }, [router, supabase, toast])
 
-  // 📦 FETCH ORDERS (FIXED TIMING)
+  // FETCH ORDERS - FILTERED BY DISTRIBUTOR_ID
   useEffect(() => {
-    if (!companyId) return
+    if (!companyId || !user) return
 
     const fetchOrders = async () => {
       try {
@@ -89,16 +90,18 @@ export default function DistributorPage() {
             quantity,
             status,
             created_at,
+            distributor_id,
             shops (
               shop_name,
               mobile_number,
               address,
               landmark
             )
-          `
+          `,
           )
           .eq("status", "pending")
           .eq("company_id", companyId)
+          .eq("distributor_id", user.id) // ✅ ONLY SHOW ORDERS ASSIGNED TO THIS DISTRIBUTOR
           .order("created_at", { ascending: true })
 
         if (error) throw error
@@ -113,14 +116,16 @@ export default function DistributorPage() {
     }
 
     fetchOrders()
-  }, [companyId, supabase, toast])
 
-  // 📞 CALL SHOP''
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchOrders, 30000)
+    return () => clearInterval(interval)
+  }, [companyId, user, supabase, toast])
+
   const handleCall = (phoneNumber: string) => {
     window.location.href = `tel:${phoneNumber}`
   }
 
-  // ✅ MARK DELIVERED
   const handleMarkDelivered = async (orderId: string) => {
     try {
       const { error } = await supabase
@@ -139,7 +144,6 @@ export default function DistributorPage() {
         description: "Order marked as delivered",
       })
 
-      // refresh orders
       setOrders((prev) => prev.filter((o) => o.id !== orderId))
     } catch (error: any) {
       toast({
@@ -150,13 +154,11 @@ export default function DistributorPage() {
     }
   }
 
-  // 🚪 LOGOUT
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/")
   }
 
-  // ⏳ LOADING STATE
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -165,15 +167,23 @@ export default function DistributorPage() {
     )
   }
 
-  // 🎯 DASHBOARD UI
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 pb-8">
-      <div className="sticky top-0 z-10 bg-white shadow-sm">
-        <div className="flex items-center justify-between p-4">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {t("distributor")}
-          </h1>
+    <div className="min-h-screen bg-[#E9FFF1] pb-8">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-[#E9FFF1]/80 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+              {t("distributor")}
+            </p>
+            <h1 className="text-xl font-bold text-slate-900">
+              ઓર્ડર કતાર
+            </h1>
+          </div>
           <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-white text-xs">
+              {orders.length} {t("pendingOrders")}
+            </Badge>
             <LanguageSelector />
             <Button variant="outline" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
@@ -182,90 +192,75 @@ export default function DistributorPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl p-4">
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl">
-                {t("orderQueue")}
-              </CardTitle>
-              <Badge variant="secondary" className="text-base">
-                {orders.length} {t("pendingOrders")}
-              </Badge>
-            </div>
-          </CardHeader>
-        </Card>
-
+      {/* Content */}
+      <div className="mx-auto mt-4 max-w-2xl px-4">
         {orders.length === 0 ? (
-          <Card>
+          <Card className="border-none bg-white/90 shadow-sm">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <Package className="mb-4 h-16 w-16 text-gray-400" />
+              <Package className="mb-4 h-16 w-16 text-gray-300" />
               <p className="text-lg text-gray-600">{t("noOrders")}</p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
             {orders.map((order) => (
-              <Card key={order.id} className="overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-green-100 to-teal-100 pb-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">
-                        {order.shops.shop_name}
-                      </CardTitle>
-                      <p className="mt-1 text-sm text-gray-600">
-                        {order.shops.mobile_number}
-                      </p>
-                    </div>
-                    <Button
-                      size="lg"
-                      className="h-14 bg-green-600 hover:bg-green-700"
-                      onClick={() =>
-                        handleCall(order.shops.mobile_number)
-                      }
-                    >
+              <Card
+                key={order.id}
+                className="overflow-hidden border-none bg-white shadow-md"
+              >
+                {/* Top strip */}
+                <div className="flex items-center justify-between bg-gradient-to-r from-emerald-50 to-emerald-100 px-4 py-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-900">
+                      {order.shops.shop_name}
+                    </h2>
+                    <p className="text-xs text-emerald-700">
                       {order.shops.mobile_number}
-                    </Button>
+                    </p>
                   </div>
-                </CardHeader>
+                  <Button
+                    size="sm"
+                    className="rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700"
+                    onClick={() => handleCall(order.shops.mobile_number)}
+                  >
+                    <Phone className="mr-1.5 h-4 w-4" />
+                    {t("call")}
+                  </Button>
+                </div>
 
-                <CardContent className="pt-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="mt-1 h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {order.shops.address}
+                {/* Body */}
+                <CardContent className="space-y-3 px-4 pt-4 pb-3">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {order.shops.address}
+                      </p>
+                      {order.shops.landmark && (
+                        <p className="text-xs text-gray-600">
+                          {order.shops.landmark}
                         </p>
-                        {order.shops.landmark && (
-                          <p className="text-sm text-gray-600">
-                            {order.shops.landmark}
-                          </p>
-                        )}
-                      </div>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <Package className="h-5 w-5 text-gray-400" />
-                      <p className="text-sm font-medium text-gray-900">
-                        {order.product_name} × {order.quantity}
+                  <div className="flex items-start gap-2">
+                    <Package className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {order.product_name}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        Qty: {order.quantity}
                       </p>
                     </div>
-
-                    <Button
-                      className="mt-4 h-14 w-full bg-blue-600 hover:bg-blue-700"
-                      onClick={() => handleMarkDelivered(order.id)}
-                    >
-                      <CheckCircle2 className="mr-2 h-5 w-5" />
-                      {t("markDelivered")}
-                    </Button>
                   </div>
                 </CardContent>
 
-                {/* Bottom CTA */}
-                <div className="border-t bg-blue-600 px-4 py-3">
+                {/* Single bottom CTA */}
+                <div className="bg-[#0F6BFF] px-4 py-3">
                   <Button
-                    className="flex w-full items-center justify-center gap-2 bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="flex w-full items-center justify-center gap-2 bg-[#0F6BFF] text-sm font-semibold text-white hover:bg-[#0b54c6]"
                     onClick={() => handleMarkDelivered(order.id)}
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -274,7 +269,6 @@ export default function DistributorPage() {
                 </div>
               </Card>
             ))}
-
           </div>
         )}
       </div>

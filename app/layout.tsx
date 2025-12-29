@@ -8,15 +8,15 @@ const geist = Geist({ subsets: ["latin"] })
 const geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "FieldFlow",
+  title: "Purohit Grow",
   description:
-    "FieldFlow – mobile-first field sales management with GPS tracking and real-time order management",
-  applicationName: "FieldFlow",
+    "Purohit Grow – Mobile-first field sales management with GPS tracking and real-time order management.",
+  applicationName: "Purohit Grow",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "FieldFlow",
+    title: "Purohit Grow",
   },
   formatDetection: {
     telephone: false,

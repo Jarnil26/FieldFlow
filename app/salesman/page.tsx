@@ -10,7 +10,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LanguageSelector } from "@/components/language-selector"
 import { useLanguage } from "@/lib/language-context"
-import { Camera, MapPin, LogOut, Plus, Minus, Menu, ShoppingCart, ChevronDown } from "lucide-react"
+
+import {
+  Camera,
+  MapPin,
+  LogOut,
+  Plus,
+  Minus,
+  Menu,
+  ShoppingCart,
+  ChevronDown,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -42,6 +52,11 @@ export default function SalesmanPage() {
   const [selfieUrl, setSelfieUrl] = useState("")
   const [productAvailable, setProductAvailable] = useState<boolean | null>(null)
   const [problemType, setProblemType] = useState("")
+  const [otherProblemDescription, setOtherProblemDescription] = useState("") // NEW: Other problem input
+
+  // DISTRIBUTOR - NEW
+  const [distributors, setDistributors] = useState<any[]>([])
+  const [selectedDistributorId, setSelectedDistributorId] = useState<string>("")
 
   // Product catalog states
   const [catalogExpanded, setCatalogExpanded] = useState(false)
@@ -49,58 +64,58 @@ export default function SalesmanPage() {
 
   // AVAILABLE products -> only boolean selection
   const [availableProducts, setAvailableProducts] = useState<any[]>([])
-  const [selectedAvailableProducts, setSelectedAvailableProducts] = useState<{ [key: string]: boolean }>({})
+  const [selectedAvailableProducts, setSelectedAvailableProducts] = useState<{
+    [key: string]: boolean
+  }>({})
 
   // NEW products -> selection + quantity
   const [newProducts, setNewProducts] = useState<any[]>([])
-  const [selectedNewProducts, setSelectedNewProducts] = useState<{ [key: string]: number }>({})
+  const [selectedNewProducts, setSelectedNewProducts] = useState<{
+    [key: string]: number
+  }>({})
 
   const [loadingProducts, setLoadingProducts] = useState(false)
 
   /* --------- SESSION HELPERS (login_sessions table) --------- */
 
   const startSession = async (userId: string, companyId: string) => {
-  try {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // Try to find an open session for today
-    const { data: existing, error: selectError } = await supabase
-      .from("login_sessions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("company_id", companyId)
-      .is("logout_at", null)
-      .gte("login_at", today.toISOString())
-      .lt("login_at", tomorrow.toISOString())
-      .maybeSingle() // <- important
+      const { data: existing, error: selectError } = await supabase
+        .from("login_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("company_id", companyId)
+        .is("logout_at", null)
+        .gte("login_at", today.toISOString())
+        .lt("login_at", tomorrow.toISOString())
+        .maybeSingle()
 
-    // If a row exists, reuse it
-    if (existing && !selectError) {
-      setSessionId(existing.id)
-      return
+      if (existing && !selectError) {
+        setSessionId(existing.id)
+        return
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("login_sessions")
+        .insert({
+          user_id: userId,
+          company_id: companyId,
+          login_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single()
+
+      if (insertError) throw insertError
+      setSessionId(inserted.id)
+    } catch (err) {
+      console.error("startSession error", err)
     }
-
-    // Otherwise create a new row
-    const { data: inserted, error: insertError } = await supabase
-      .from("login_sessions")
-      .insert({
-        user_id: userId,
-        company_id: companyId,
-        login_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single()
-
-    if (insertError) throw insertError
-    setSessionId(inserted.id)
-  } catch (err) {
-    console.error("startSession error", err)
   }
-}
-
 
   const endSession = async () => {
     if (!sessionId) return
@@ -172,10 +187,7 @@ export default function SalesmanPage() {
 
       setCompanyId(profile.company_id)
       await loadTodayVisits(user.id)
-
-      // create login_sessions row
       await startSession(user.id, profile.company_id)
-
       setLoading(false)
     }
 
@@ -186,7 +198,6 @@ export default function SalesmanPage() {
   useEffect(() => {
     if (!user) return
 
-    // 1) Auto-logout at next midnight
     const now = new Date()
     const nextMidnight = new Date()
     nextMidnight.setHours(24, 0, 0, 0)
@@ -196,7 +207,6 @@ export default function SalesmanPage() {
       forceLogout("Auto-logout at midnight.")
     }, msUntilMidnight)
 
-    // 2) Auto-logout if no movement for 20 minutes
     let watchId: number | null = null
     let lastMoveTime = Date.now()
     let lastCoords: { lat: number; lon: number } | null = null
@@ -211,7 +221,9 @@ export default function SalesmanPage() {
       const dLon = toRad(lon2 - lon1)
       const a =
         Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
       return R * c
     }
@@ -261,10 +273,11 @@ export default function SalesmanPage() {
     }
   }, [user])
 
-  /* -------------------- LOAD PRODUCTS WHEN companyId READY -------------------- */
+  /* -------------------- LOAD PRODUCTS + DISTRIBUTORS WHEN companyId READY -------------------- */
   useEffect(() => {
     if (!companyId) return
     loadAllProducts()
+    loadDistributors()
   }, [companyId])
 
   const loadTodayVisits = async (userId: string) => {
@@ -281,6 +294,30 @@ export default function SalesmanPage() {
       .lt("created_at", tomorrow.toISOString())
 
     setTodayVisits(count || 0)
+  }
+
+  const loadDistributors = async () => {
+    if (!companyId) return
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, role")
+        .eq("company_id", companyId)
+        .eq("role", "distributor")
+        .order("full_name", { ascending: true })
+
+      if (error) {
+        console.error("loadDistributors error:", error)
+        setDistributors([])
+        return
+      }
+
+      console.log("Loaded distributors:", data)
+      setDistributors(data || [])
+    } catch (err) {
+      console.error("loadDistributors failed:", err)
+      setDistributors([])
+    }
   }
 
   const loadAllProducts = async () => {
@@ -357,7 +394,8 @@ export default function SalesmanPage() {
           setAddress(simpleAddress || "Location detected")
           toast({
             title: "Location detected",
-            description: simpleAddress || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+            description:
+              simpleAddress || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
           })
         } catch (error) {
           setAddress("Location detected")
@@ -421,17 +459,32 @@ export default function SalesmanPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // DISTRIBUTOR VALIDATION - NEW
+    if (!selectedDistributorId) {
+      toast({
+        title: "Error",
+        description: "Please select a distributor",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!latitude || !longitude) {
       toast({
         title: "Error",
-        description: "Please detect location first or enter coordinates manually",
+        description:
+          "Please detect location first or enter coordinates manually",
         variant: "destructive",
       })
       return
     }
 
     if (!selfieUrl) {
-      toast({ title: "Error", description: "Please take a shop selfie", variant: "destructive" })
+      toast({
+        title: "Error",
+        description: "Please take a shop selfie",
+        variant: "destructive",
+      })
       return
     }
 
@@ -453,6 +506,16 @@ export default function SalesmanPage() {
       return
     }
 
+    // NEW: Validate other problem description when "other" is selected
+    if (!productAvailable && problemType === "other" && !otherProblemDescription.trim()) {
+      toast({
+        title: "Error",
+        description: "Please describe the specific problem",
+        variant: "destructive",
+      })
+      return
+    }
+
     setSubmitting(true)
 
     try {
@@ -468,6 +531,7 @@ export default function SalesmanPage() {
           selfie_url: selfieUrl,
           product_available: productAvailable,
           problem_type: !productAvailable ? problemType : null,
+          problem_description: !productAvailable && problemType === "other" ? otherProblemDescription : null, // NEW: Save description
           created_by: user.id,
           company_id: companyId,
         })
@@ -476,29 +540,41 @@ export default function SalesmanPage() {
 
       if (shopError) throw shopError
 
-      // AVAILABLE products -> present (qty 1)
+      // AVAILABLE products -> store in shop_products (not orders)
       if (productAvailable) {
         const selectedIds = Object.keys(selectedAvailableProducts).filter(
           (id) => selectedAvailableProducts[id],
         )
 
-        for (const product_id of selectedIds) {
-          const product = availableProducts.find((p) => p.id === product_id)
-          if (!product) continue
+        if (selectedIds.length > 0) {
+          const rows = selectedIds
+            .map((product_id) => {
+              const product = availableProducts.find((p) => p.id === product_id)
+              if (!product) return null
+              return {
+                shop_id: shopData.id,
+                company_id: companyId,
+                product_id,
+                product_name: product.name,
+                is_available: true,
+                created_by: user.id,
+              }
+            })
+            .filter(Boolean)
 
-          await supabase.from("orders").insert({
-            shop_id: shopData.id,
-            product_name: product.name,
-            quantity: 1,
-            status: "pending",
-            created_by: user.id,
-            company_id: companyId,
-          })
+          if (rows.length > 0) {
+            const { error: availError } = await supabase
+              .from("shop_products")
+              .insert(rows as any)
+            if (availError) throw availError
+          }
         }
       }
 
-      // NEW products -> quantity
-      for (const [product_id, quantity] of Object.entries(selectedNewProducts)) {
+      // NEW products -> quantity -> orders WITH DISTRIBUTOR_ID
+      for (const [product_id, quantity] of Object.entries(
+        selectedNewProducts,
+      )) {
         if (!quantity || quantity <= 0) continue
         const product = newProducts.find((p) => p.id === product_id)
         if (!product) continue
@@ -510,11 +586,16 @@ export default function SalesmanPage() {
           status: "pending",
           created_by: user.id,
           company_id: companyId,
+          distributor_id: selectedDistributorId, // NEW: distributor assignment
         })
       }
 
-      toast({ title: t("visitSubmitted"), description: "Visit recorded successfully" })
+      toast({
+        title: t("visitSubmitted"),
+        description: "Visit recorded successfully",
+      })
 
+      // RESET FORM INCLUDING DISTRIBUTOR AND NEW FIELD
       setShopName("")
       setMobileNo("")
       setLandmark("")
@@ -524,8 +605,10 @@ export default function SalesmanPage() {
       setSelfieUrl("")
       setProductAvailable(null)
       setProblemType("")
+      setOtherProblemDescription("") // NEW: Reset other description
       setSelectedAvailableProducts({})
       setSelectedNewProducts({})
+      setSelectedDistributorId("") // NEW: reset distributor
       setCatalogExpanded(false)
       setNewProductsExpanded(false)
       await loadTodayVisits(user.id)
@@ -612,6 +695,33 @@ export default function SalesmanPage() {
                     className="mt-2 h-12 text-base"
                   />
                 </div>
+
+                {/* DISTRIBUTOR DROPDOWN - NEW */}
+                <div>
+                  <Label htmlFor="distributor" className="text-base">
+                    Select Distributor <span className="text-red-500">*</span>
+                  </Label>
+                  <select
+                    id="distributor"
+                    value={selectedDistributorId}
+                    onChange={(e) => setSelectedDistributorId(e.target.value)}
+                    className="mt-2 h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    required
+                  >
+                    <option value="">Choose distributor...</option>
+                    {distributors.map((distributor) => (
+                      <option key={distributor.id} value={distributor.id}>
+                        {distributor.full_name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {distributors.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      No distributors found for this company
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Location button + coordinates preview */}
@@ -620,7 +730,7 @@ export default function SalesmanPage() {
                   type="button"
                   onClick={detectLocation}
                   variant="outline"
-                  className="h-14 w-full text-base bg-transparent"
+                  className="h-14 w-full bg-transparent text-base"
                   disabled={!!latitude}
                 >
                   <MapPin className="mr-2 h-5 w-5" />
@@ -628,8 +738,8 @@ export default function SalesmanPage() {
                 </Button>
                 {latitude && longitude && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Detected: {latitude.toFixed(5)}, {longitude.toFixed(5)} (edit address if this
-                    seems wrong)
+                    Detected: {latitude.toFixed(5)}, {longitude.toFixed(5)} (edit address if
+                    this seems wrong)
                   </p>
                 )}
               </div>
@@ -655,7 +765,11 @@ export default function SalesmanPage() {
                 <div className="mt-2">
                   {selfieUrl ? (
                     <div className="relative">
-                      <img src={selfieUrl} alt="Shop" className="h-48 w-full rounded-lg object-cover" />
+                      <img
+                        src={selfieUrl}
+                        alt="Shop"
+                        className="h-48 w-full rounded-lg object-cover"
+                      />
                       <Button
                         type="button"
                         variant="secondary"
@@ -698,6 +812,7 @@ export default function SalesmanPage() {
                     onClick={() => {
                       setProductAvailable(true)
                       setProblemType("")
+                      setOtherProblemDescription("") // NEW: Clear when switching to Yes
                     }}
                     className="h-14 text-base"
                   >
@@ -727,7 +842,10 @@ export default function SalesmanPage() {
                     <Button
                       type="button"
                       variant={problemType === "price_high" ? "default" : "outline"}
-                      onClick={() => setProblemType("price_high")}
+                      onClick={() => {
+                        setProblemType("price_high")
+                        setOtherProblemDescription("")
+                      }}
                       className="h-14 text-sm"
                     >
                       {t("priceHigh")}
@@ -735,7 +853,10 @@ export default function SalesmanPage() {
                     <Button
                       type="button"
                       variant={problemType === "no_space" ? "default" : "outline"}
-                      onClick={() => setProblemType("no_space")}
+                      onClick={() => {
+                        setProblemType("no_space")
+                        setOtherProblemDescription("")
+                      }}
                       className="h-14 text-sm"
                     >
                       {t("noSpace")}
@@ -743,7 +864,10 @@ export default function SalesmanPage() {
                     <Button
                       type="button"
                       variant={problemType === "competitor" ? "default" : "outline"}
-                      onClick={() => setProblemType("competitor")}
+                      onClick={() => {
+                        setProblemType("competitor")
+                        setOtherProblemDescription("")
+                      }}
                       className="h-14 text-sm"
                     >
                       {t("competitor")}
@@ -757,6 +881,28 @@ export default function SalesmanPage() {
                       {t("other")}
                     </Button>
                   </div>
+
+                  {/* NEW: Other Problem Description Input */}
+                  {problemType === "other" && (
+                    <div className="mt-4">
+                      <Label htmlFor="otherProblem" className="text-base">
+                        Specific Problem <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="otherProblem"
+                        type="text"
+                        value={otherProblemDescription}
+                        onChange={(e) => setOtherProblemDescription(e.target.value)}
+                        placeholder="Describe the exact problem..."
+                        required={problemType === "other"}
+                        className="mt-2 h-12 text-base"
+                        maxLength={200}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Max 200 characters
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -773,29 +919,28 @@ export default function SalesmanPage() {
                         <Menu className="mr-2 h-5 w-5" /> Available Products (
                         {availableProducts.length})
                         <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${
-                            catalogExpanded ? "rotate-180" : ""
-                          }`}
+                          className={`ml-auto h-4 w-4 transition-transform ${catalogExpanded ? "rotate-180" : ""
+                            }`}
                         />
                       </Button>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-4 mt-2">
+                    <CollapsibleContent className="mt-2 space-y-4">
                       <ScrollArea className="h-40 rounded-md border p-2">
                         {loadingProducts ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">
+                          <p className="py-8 text-center text-sm text-muted-foreground">
                             Loading...
                           </p>
                         ) : availableProducts.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">
+                          <p className="py-8 text-center text-sm text-muted-foreground">
                             No available products
                           </p>
                         ) : (
                           availableProducts.map((product) => (
                             <div
                               key={product.id}
-                              className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50 rounded"
+                              className="flex items-center justify-between rounded p-3 border-b last:border-b-0 hover:bg-gray-50"
                             >
-                              <div className="flex items-center gap-3 flex-1">
+                              <div className="flex flex-1 items-center gap-3">
                                 <Checkbox
                                   id={`avail-${product.id}`}
                                   checked={!!selectedAvailableProducts[product.id]}
@@ -811,10 +956,10 @@ export default function SalesmanPage() {
                                     <img
                                       src={product.image_url}
                                       alt={product.name}
-                                      className="h-10 w-10 rounded object-cover border"
+                                      className="h-10 w-10 rounded border object-cover"
                                     />
                                   )}
-                                  <p className="font-medium text-sm">{product.name}</p>
+                                  <p className="text-sm font-medium">{product.name}</p>
                                 </div>
                               </div>
                             </div>
@@ -844,29 +989,28 @@ export default function SalesmanPage() {
                           </Badge>
                         )}
                         <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${
-                            newProductsExpanded ? "rotate-180" : ""
-                          }`}
+                          className={`ml-auto h-4 w-4 transition-transform ${newProductsExpanded ? "rotate-180" : ""
+                            }`}
                         />
                       </Button>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-4 mt-2">
+                    <CollapsibleContent className="mt-2 space-y-4">
                       <ScrollArea className="h-40 rounded-md border p-2">
                         {loadingProducts ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">
+                          <p className="py-8 text-center text-sm text-muted-foreground">
                             Loading...
                           </p>
                         ) : newProducts.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">
+                          <p className="py-8 text-center text-sm text-muted-foreground">
                             No new products to offer
                           </p>
                         ) : (
                           newProducts.map((product) => (
                             <div
                               key={product.id}
-                              className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-yellow-50 rounded"
+                              className="flex items-center justify-between rounded p-3 border-b last:border-b-0 hover:bg-yellow-50"
                             >
-                              <div className="flex items-center gap-3 flex-1">
+                              <div className="flex flex-1 items-center gap-3">
                                 <Checkbox
                                   id={`new-${product.id}`}
                                   checked={selectedNewProducts[product.id] != null}
@@ -883,19 +1027,19 @@ export default function SalesmanPage() {
                                     <img
                                       src={product.image_url}
                                       alt={product.name}
-                                      className="h-10 w-10 rounded object-cover border"
+                                      className="h-10 w-10 rounded border object-cover"
                                     />
                                   )}
                                   <div>
-                                    <p className="font-medium text-sm">{product.name}</p>
-                                    <p className="text-xs text-muted-foreground bg-yellow-100 px-2 py-1 rounded-full">
+                                    <p className="text-sm font-medium">{product.name}</p>
+                                    <p className="mt-1 rounded-full bg-yellow-100 px-2 py-1 text-xs text-muted-foreground">
                                       New Product
                                     </p>
                                   </div>
                                 </div>
                               </div>
                               {selectedNewProducts[product.id] && (
-                                <div className="flex items-center gap-2 ml-4">
+                                <div className="ml-4 flex items-center gap-2">
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -910,7 +1054,7 @@ export default function SalesmanPage() {
                                   >
                                     <Minus className="h-3 w-3" />
                                   </Button>
-                                  <span className="w-10 text-center font-semibold text-sm">
+                                  <span className="w-10 text-center text-sm font-semibold">
                                     {selectedNewProducts[product.id]}
                                   </span>
                                   <Button
