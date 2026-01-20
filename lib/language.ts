@@ -54,6 +54,8 @@ export const translations = {
     totalVisits: "Total Visits",
     productsStocked: "Products Stocked",
     rejections: "Rejections",
+    productAdded: "Product added",
+    saveProduct: "Save Product",
 
     // Auth
     login: "Login",
@@ -132,6 +134,8 @@ export const translations = {
     totalVisits: "કુલ મુલાકાતો",
     productsStocked: "સ્ટોક થયેલ પ્રોડક્ટ",
     rejections: "નકારણા",
+    productAdded: "પ્રોડક્ટ ઉમેરવામાં આવી",
+    saveProduct: "પ્રોડક્ટ સેવ કરો",
 
     // Auth
     login: "લૉગિન",
@@ -210,6 +214,8 @@ export const translations = {
     totalVisits: "कुल विज़िट",
     productsStocked: "स्टॉक किए गए प्रोડक्ट",
     rejections: "अस्वीकृतियाँ",
+    productAdded: "उत्पाद जोड़ा गया",
+    saveProduct: "उत्पाद सहेजें",
 
     // Auth
     login: "लॉगिन",

@@ -78,6 +78,18 @@ export default function OwnerPage() {
   const [newProductFile, setNewProductFile] = useState<File | null>(null)
   const [addingProduct, setAddingProduct] = useState(false)
 
+  const CATEGORIES = [
+    "5rs product",
+    "10rs Product",
+    "200 gram product",
+    "250 gram product",
+    "400 gram product",
+    "500 gram product",
+    "800 gram product",
+    "mamra product",
+  ];
+  const [category, setCategory] = useState("");
+
   /* -------------------- AUTH + COMPANY -------------------- */
   useEffect(() => {
     const init = async () => {
@@ -182,9 +194,9 @@ export default function OwnerPage() {
       if (profilesError) throw profilesError
 
       const nameMap = new Map<string, string | null>()
-      ;(profilesData || []).forEach((p: any) => {
-        nameMap.set(p.id, p.full_name ?? null)
-      })
+        ; (profilesData || []).forEach((p: any) => {
+          nameMap.set(p.id, p.full_name ?? null)
+        })
 
       const mapped: SessionRow[] = sessionsList.map((row: any) => ({
         id: row.id,
@@ -351,9 +363,11 @@ export default function OwnerPage() {
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath)
       const imageUrl = urlData?.publicUrl
 
+      // Find this section inside handleAddProduct
       const { error: insertError } = await supabase.from("products").insert({
         company_id: company.id,
         name: newProductName.trim(),
+        category: category,      // <--- ADD THIS LINE
         image_url: imageUrl,
         status: "active",
       })
@@ -361,11 +375,12 @@ export default function OwnerPage() {
       if (insertError) throw insertError
 
       toast({
-        title: "Product added",
+        title: t("productAdded") || "Product added", // Use translation if available
         description: "Product created successfully",
       })
 
       setNewProductName("")
+      setCategory("")            // <--- ADD THIS LINE to reset the dropdown
       setNewProductFile(null)
       setAddOpen(false)
     } catch (err: any) {
@@ -449,16 +464,41 @@ export default function OwnerPage() {
                 <DialogTitle>Add Product</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleAddProduct} className="space-y-4">
+                {/* Product Name */}
                 <div>
                   <Label htmlFor="productName">Product Name</Label>
                   <Input
                     id="productName"
                     value={newProductName}
                     onChange={(e) => setNewProductName(e.target.value)}
-                    placeholder="Balaji Tomato Twist ₹10"
+                    placeholder="Soya Chips"
                     required
                   />
                 </div>
+
+                {/* Category Selection */}
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <select
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    required
+                  >
+                    <option value="" disabled>Select a category</option>
+                    <option value="5rs product">5rs product</option>
+                    <option value="10rs Product">10rs Product</option>
+                    <option value="200 gram product">200 gram product</option>
+                    <option value="250 gram product">250 gram product</option>
+                    <option value="400 gram product">400 gram product</option>
+                    <option value="500 gram product">500 gram product</option>
+                    <option value="800 gram product">800 gram product</option>
+                    <option value="mamra product">Mamra product</option>
+                  </select>
+                </div>
+
+                {/* Product Image */}
                 <div>
                   <Label htmlFor="productImage">Product Image</Label>
                   <Input
@@ -474,6 +514,7 @@ export default function OwnerPage() {
                     Image will be uploaded to Supabase Storage bucket <code>product-images</code>.
                   </p>
                 </div>
+
                 <Button type="submit" disabled={addingProduct} className="w-full">
                   {addingProduct ? "Saving..." : "Save Product"}
                 </Button>
@@ -536,16 +577,16 @@ export default function OwnerPage() {
                               })
                               const logoutStr = logout
                                 ? logout.toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
                                 : "-"
                               const mins =
                                 s.duration_minutes ??
                                 (logout
                                   ? Math.round(
-                                      (logout.getTime() - login.getTime()) / 60000,
-                                    )
+                                    (logout.getTime() - login.getTime()) / 60000,
+                                  )
                                   : null)
 
                               return (

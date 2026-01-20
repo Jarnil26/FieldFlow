@@ -26,6 +26,13 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  image_url: string;
+  status?: string;
+}
 
 export default function SalesmanPage() {
   const router = useRouter()
@@ -76,6 +83,21 @@ export default function SalesmanPage() {
 
   const [loadingProducts, setLoadingProducts] = useState(false)
 
+  const CATEGORIES = [
+    "5rs product",
+    "10rs Product",
+    "200 gram product",
+    "250 gram product",
+    "400 gram product",
+    "500 gram product",
+    "800 gram product",
+    "mamra product"
+  ];
+
+  const groupedProducts = CATEGORIES.reduce((acc: any, cat) => {
+    acc[cat] = newProducts.filter(p => p.category === cat);
+    return acc;
+  }, {});
   /* --------- SESSION HELPERS (login_sessions table) --------- */
 
   const startSession = async (userId: string, companyId: string) => {
@@ -445,16 +467,42 @@ export default function SalesmanPage() {
       reader.readAsDataURL(file)
     }
   }
+  // New Update
+  const updateCategoryQuantity = (
+    product: Product, // Now explicitly typed
+    currentQty: number,
+    direction: "plus" | "minus" | "init"
+  ) => {
+    const cat = product.category?.toLowerCase() || "";
 
-  const updateNewProductQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      const newState = { ...selectedNewProducts }
-      delete newState[productId]
-      setSelectedNewProducts(newState)
-    } else {
-      setSelectedNewProducts({ ...selectedNewProducts, [productId]: quantity })
+    // Custom Increment Rules
+    let step = 1;
+    if (cat.includes("5rs") || cat.includes("10rs")) {
+      step = 12; // Default 12 and increment by 12
+    } else if (cat.includes("200 gram")) {
+      step = 5;  // Default 5 and increment by 5
+    } else if (cat.includes("250 gram")) {
+      step = 4;  // Default 4 and increment by 4
     }
-  }
+
+    let newQty: number;
+    if (direction === "init") {
+      newQty = step;
+    } else if (direction === "plus") {
+      newQty = currentQty + step;
+    } else {
+      newQty = Math.max(0, currentQty - step);
+    }
+
+    // Update selection state
+    if (newQty <= 0) {
+      const newState = { ...selectedNewProducts };
+      delete newState[product.id];
+      setSelectedNewProducts(newState);
+    } else {
+      setSelectedNewProducts({ ...selectedNewProducts, [product.id]: newQty });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -907,138 +955,141 @@ export default function SalesmanPage() {
               )}
 
               {productAvailable === true && (
-  <>
-    {/* NEW PRODUCTS */}
-    <Collapsible
-      open={newProductsExpanded}
-      onOpenChange={setNewProductsExpanded}
-      className="mt-4"
-    >
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-14 w-full justify-start text-base"
-        >
-          <ShoppingCart className="mr-2 h-5 w-5" />
-          New Products to Offer ({newProducts.length})
-
-          {Object.keys(selectedNewProducts).length > 0 && (
-            <Badge className="ml-2 h-6 px-2">
-              {Object.keys(selectedNewProducts).length}
-            </Badge>
-          )}
-
-          <ChevronDown
-            className={`ml-auto h-4 w-4 transition-transform ${
-              newProductsExpanded ? "rotate-180" : ""
-            }`}
-          />
-        </Button>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="mt-3">
-        {/* 🔽 RESTRICTED SCROLL AREA */}
-        <div className="max-h-[60vh] overflow-y-auto rounded-xl border bg-gray-50 p-3">
-          {loadingProducts ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Loading...
-            </p>
-          ) : newProducts.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No new products to offer
-            </p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {newProducts.map((product) => {
-                const qty = selectedNewProducts[product.id]
-                const isSelected = qty != null
-
-                return (
-                  <div
-                    key={product.id}
-                    className={`rounded-2xl border bg-white shadow-md transition ${
-                      isSelected ? "ring-2 ring-yellow-400" : ""
-                    }`}
+                <>
+                  {/* NEW PRODUCTS */}
+                  <Collapsible
+                    open={newProductsExpanded}
+                    onOpenChange={setNewProductsExpanded}
+                    className="mt-4"
                   >
-                    {/* IMAGE */}
-                    <div className="relative">
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="h-52 w-full rounded-t-2xl object-contain bg-gray-50 p-4"
-                      />
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-14 w-full justify-start text-base"
+                      >
+                        <ShoppingCart className="mr-2 h-5 w-5" />
+                        New Products to Offer ({newProducts.length})
 
-                      {/* Checkbox */}
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          updateNewProductQuantity(
-                            product.id,
-                            checked ? 1 : 0
-                          )
-                        }
-                        className="absolute left-3 top-3 scale-125 bg-white shadow"
-                      />
-                    </div>
+                        {Object.keys(selectedNewProducts).length > 0 && (
+                          <Badge className="ml-2 h-6 px-2">
+                            {Object.keys(selectedNewProducts).length}
+                          </Badge>
+                        )}
 
-                    {/* CONTENT */}
-                    <div className="p-4 text-center">
-                      <p className="text-lg font-semibold leading-tight">
-                        {product.name}
-                      </p>
+                        <ChevronDown
+                          className={`ml-auto h-4 w-4 transition-transform ${newProductsExpanded ? "rotate-180" : ""
+                            }`}
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
 
-                      <span className="mt-2 inline-block rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-800">
-                        New Product
-                      </span>
+                    <CollapsibleContent className="mt-3">
+                      <div className="rounded-xl border bg-gray-50 p-4">
+                        {loadingProducts ? (
+                          <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+                        ) : newProducts.length === 0 ? (
+                          <p className="py-8 text-center text-sm text-muted-foreground">No new products to offer</p>
+                        ) : (
+                          <div className="space-y-10">
+                            {CATEGORIES.map((cat) => {
+                              const categoryProducts = groupedProducts[cat] || [];
+                              if (categoryProducts.length === 0) return null;
 
-                      {/* COUNTER */}
-                      {isSelected && (
-                        <div className="mt-5 flex flex-col items-center gap-2">
-                          <div className="flex items-center gap-6">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() =>
-                                updateNewProductQuantity(product.id, qty - 1)
-                              }
-                              className="h-12 w-12 rounded-full"
-                            >
-                              <Minus className="h-5 w-5" />
-                            </Button>
+                              return (
+                                <div key={cat} className="space-y-4">
+                                  {/* Category Header */}
+                                  <div className="flex items-center gap-4">
+                                    <h3 className="whitespace-nowrap text-xs font-bold uppercase tracking-widest text-indigo-600">
+                                      {cat}
+                                    </h3>
+                                    <div className="h-px w-full bg-indigo-100" />
+                                  </div>
+                                  {/* Responsive E-commerce Grid */}
+                                  {/* E-commerce Grid */}
+                                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    {categoryProducts.map((product: Product) => {
+                                      const qty = selectedNewProducts[product.id];
+                                      const isSelected = qty != null;
 
-                            <span className="text-2xl font-bold">
-                              {qty}
-                            </span>
+                                      return (
+                                        <div
+                                          key={product.id}
+                                          className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${isSelected ? "ring-2 ring-indigo-500" : "border-gray-100"
+                                            }`}
+                                        >
+                                          {/* Image Area */}
+                                          <div className="relative h-44 w-full bg-gray-50 p-4">
+                                            <img
+                                              src={product.image_url}
+                                              alt={product.name}
+                                              className="h-full w-full object-contain transition-transform duration-300 hover:scale-105"
+                                            />
+                                            <div className="absolute left-3 top-3">
+                                              <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={(checked) =>
+                                                  updateCategoryQuantity(product, 0, checked ? "init" : "minus")
+                                                }
+                                                className="h-5 w-5 rounded-md border-gray-300 bg-white data-[state=checked]:bg-indigo-600"
+                                              />
+                                            </div>
+                                          </div>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() =>
-                                updateNewProductQuantity(product.id, qty + 1)
-                              }
-                              className="h-12 w-12 rounded-full"
-                            >
-                              <Plus className="h-5 w-5" />
-                            </Button>
+                                          {/* Product Details */}
+                                          <div className="flex flex-1 flex-col p-4">
+                                            <h4 className="line-clamp-2 text-sm font-bold leading-tight text-gray-900">
+                                              {product.name}
+                                            </h4>
+
+                                            {/* Quantity Controls - Only shows if checked */}
+                                            {isSelected && (
+                                              <div className="mt-auto pt-4">
+                                                <div className="flex items-center justify-between rounded-xl bg-indigo-50 p-1">
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => updateCategoryQuantity(product, qty, "minus")}
+                                                    className="h-8 w-8 rounded-lg hover:bg-white"
+                                                  >
+                                                    <Minus className="h-4 w-4 text-indigo-600" />
+                                                  </Button>
+
+                                                  <span className="text-sm font-black text-indigo-900">
+                                                    {qty}
+                                                  </span>
+
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => updateCategoryQuantity(product, qty, "plus")}
+                                                    className="h-8 w-8 rounded-lg hover:bg-white"
+                                                  >
+                                                    <Plus className="h-4 w-4 text-indigo-600" />
+                                                  </Button>
+                                                </div>
+                                                <p className="mt-1 text-center text-[10px] font-medium text-indigo-400">
+                                                  PACKETS
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-
-                          <p className="text-xs text-muted-foreground">
-                            Quantity = number of packets
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  </>
-)}
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </>
+              )}
 
               <Button type="submit" disabled={submitting} className="h-14 w-full text-lg">
                 {submitting ? t("loading") : t("submit")}
