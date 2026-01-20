@@ -907,180 +907,138 @@ export default function SalesmanPage() {
               )}
 
               {productAvailable === true && (
-                <>
-                  {/* AVAILABLE PRODUCTS */}
-                  <Collapsible open={catalogExpanded} onOpenChange={setCatalogExpanded}>
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-14 w-full justify-start text-base"
-                      >
-                        <Menu className="mr-2 h-5 w-5" /> Available Products (
-                        {availableProducts.length})
-                        <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${catalogExpanded ? "rotate-180" : ""
-                            }`}
-                        />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2 space-y-4">
-                      <ScrollArea className="h-40 rounded-md border p-2">
-                        {loadingProducts ? (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            Loading...
-                          </p>
-                        ) : availableProducts.length === 0 ? (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            No available products
-                          </p>
-                        ) : (
-                          availableProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              className="flex items-center justify-between rounded p-3 border-b last:border-b-0 hover:bg-gray-50"
-                            >
-                              <div className="flex flex-1 items-center gap-3">
-                                <Checkbox
-                                  id={`avail-${product.id}`}
-                                  checked={!!selectedAvailableProducts[product.id]}
-                                  onCheckedChange={(checked) => {
-                                    setSelectedAvailableProducts({
-                                      ...selectedAvailableProducts,
-                                      [product.id]: !!checked,
-                                    })
-                                  }}
-                                />
-                                <div className="flex items-center gap-3">
-                                  {product.image_url && (
-                                    <img
-                                      src={product.image_url}
-                                      alt={product.name}
-                                      className="h-10 w-10 rounded border object-cover"
-                                    />
-                                  )}
-                                  <p className="text-sm font-medium">{product.name}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </ScrollArea>
-                    </CollapsibleContent>
-                  </Collapsible>
+  <>
+    {/* NEW PRODUCTS */}
+    <Collapsible
+      open={newProductsExpanded}
+      onOpenChange={setNewProductsExpanded}
+      className="mt-4"
+    >
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-14 w-full justify-start text-base"
+        >
+          <ShoppingCart className="mr-2 h-5 w-5" />
+          New Products to Offer ({newProducts.length})
 
-                  {/* NEW PRODUCTS */}
-                  <Collapsible
-                    open={newProductsExpanded}
-                    onOpenChange={setNewProductsExpanded}
-                    className="mt-4"
+          {Object.keys(selectedNewProducts).length > 0 && (
+            <Badge className="ml-2 h-6 px-2">
+              {Object.keys(selectedNewProducts).length}
+            </Badge>
+          )}
+
+          <ChevronDown
+            className={`ml-auto h-4 w-4 transition-transform ${
+              newProductsExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </Button>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="mt-3">
+        {/* 🔽 RESTRICTED SCROLL AREA */}
+        <div className="max-h-[60vh] overflow-y-auto rounded-xl border bg-gray-50 p-3">
+          {loadingProducts ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Loading...
+            </p>
+          ) : newProducts.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No new products to offer
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {newProducts.map((product) => {
+                const qty = selectedNewProducts[product.id]
+                const isSelected = qty != null
+
+                return (
+                  <div
+                    key={product.id}
+                    className={`rounded-2xl border bg-white shadow-md transition ${
+                      isSelected ? "ring-2 ring-yellow-400" : ""
+                    }`}
                   >
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-14 w-full justify-start text-base"
-                      >
-                        <ShoppingCart className="mr-2 h-5 w-5" /> New Products to Offer (
-                        {newProducts.length})
-                        {Object.keys(selectedNewProducts).length > 0 && (
-                          <Badge className="ml-2 h-6 px-2">
-                            {Object.keys(selectedNewProducts).length}
-                          </Badge>
-                        )}
-                        <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${newProductsExpanded ? "rotate-180" : ""
-                            }`}
-                        />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2 space-y-4">
-                      <ScrollArea className="h-40 rounded-md border p-2">
-                        {loadingProducts ? (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            Loading...
-                          </p>
-                        ) : newProducts.length === 0 ? (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            No new products to offer
-                          </p>
-                        ) : (
-                          newProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              className="flex items-center justify-between rounded p-3 border-b last:border-b-0 hover:bg-yellow-50"
+                    {/* IMAGE */}
+                    <div className="relative">
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="h-52 w-full rounded-t-2xl object-contain bg-gray-50 p-4"
+                      />
+
+                      {/* Checkbox */}
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) =>
+                          updateNewProductQuantity(
+                            product.id,
+                            checked ? 1 : 0
+                          )
+                        }
+                        className="absolute left-3 top-3 scale-125 bg-white shadow"
+                      />
+                    </div>
+
+                    {/* CONTENT */}
+                    <div className="p-4 text-center">
+                      <p className="text-lg font-semibold leading-tight">
+                        {product.name}
+                      </p>
+
+                      <span className="mt-2 inline-block rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-800">
+                        New Product
+                      </span>
+
+                      {/* COUNTER */}
+                      {isSelected && (
+                        <div className="mt-5 flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-6">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                updateNewProductQuantity(product.id, qty - 1)
+                              }
+                              className="h-12 w-12 rounded-full"
                             >
-                              <div className="flex flex-1 items-center gap-3">
-                                <Checkbox
-                                  id={`new-${product.id}`}
-                                  checked={selectedNewProducts[product.id] != null}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      updateNewProductQuantity(product.id, 1)
-                                    } else {
-                                      updateNewProductQuantity(product.id, 0)
-                                    }
-                                  }}
-                                />
-                                <div className="flex items-center gap-3">
-                                  {product.image_url && (
-                                    <img
-                                      src={product.image_url}
-                                      alt={product.name}
-                                      className="h-10 w-10 rounded border object-cover"
-                                    />
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-medium">{product.name}</p>
-                                    <p className="mt-1 rounded-full bg-yellow-100 px-2 py-1 text-xs text-muted-foreground">
-                                      New Product
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              {selectedNewProducts[product.id] && (
-                                <div className="ml-4 flex items-center gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      updateNewProductQuantity(
-                                        product.id,
-                                        (selectedNewProducts[product.id] || 0) - 1,
-                                      )
-                                    }
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                  </Button>
-                                  <span className="w-10 text-center text-sm font-semibold">
-                                    {selectedNewProducts[product.id]}
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      updateNewProductQuantity(
-                                        product.id,
-                                        (selectedNewProducts[product.id] || 0) + 1,
-                                      )
-                                    }
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </ScrollArea>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </>
-              )}
+                              <Minus className="h-5 w-5" />
+                            </Button>
+
+                            <span className="text-2xl font-bold">
+                              {qty}
+                            </span>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                updateNewProductQuantity(product.id, qty + 1)
+                              }
+                              className="h-12 w-12 rounded-full"
+                            >
+                              <Plus className="h-5 w-5" />
+                            </Button>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground">
+                            Quantity = number of packets
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  </>
+)}
 
               <Button type="submit" disabled={submitting} className="h-14 w-full text-lg">
                 {submitting ? t("loading") : t("submit")}
