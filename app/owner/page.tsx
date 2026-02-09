@@ -36,8 +36,8 @@ interface Shop {
   problem_type: string | null
   problem_description: string | null
   created_at: string
-  selfie_url?: string
 }
+
 
 interface SessionRow {
   id: string
@@ -93,9 +93,7 @@ export default function OwnerPage() {
   /* -------------------- AUTH + COMPANY -------------------- */
   useEffect(() => {
     const init = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
         router.push("/auth/login?role=owner")
@@ -104,54 +102,65 @@ export default function OwnerPage() {
 
       setUser(user)
 
-      const { data: companyData, error } = await supabase
+      const { data, error } = await supabase
         .from("companies")
-        .select("*")
+        .select("id, company_name, company_code")
         .eq("owner_id", user.id)
         .single()
 
-      if (error || !companyData) {
+      if (error || !data) {
         toast({
-          title: "Error",
-          description: "No company found. Please contact support.",
+          title: "Company not found",
           variant: "destructive",
         })
-        await supabase.auth.signOut()
-        router.push("/")
         return
       }
 
-      setCompany(companyData)
+      setCompany(data)
       setLoading(false)
     }
 
     init()
-  }, [router, supabase, toast])
+  }, [])
+
 
   /* -------------------- FETCH DATA -------------------- */
   useEffect(() => {
     if (!company?.id) return
+
     fetchData(company.id)
-    fetchSessions(company.id)
-    fetchShopProducts(company.id)
+
+    setTimeout(() => fetchSessions(company.id), 300)
+    setTimeout(() => fetchShopProducts(), 600)
+
   }, [company])
 
-  const fetchData = async (companyId: string) => {
-    if (!companyId) return
 
+  const fetchData = async (companyId: string) => {
     try {
-      const { data: shopsData, error } = await supabase
+      const { data, error } = await supabase
         .from("shops")
         .select(`
-          *,
-          problem_description
-        `)
+  id,
+  shop_name,
+  mobile_number,
+  latitude,
+  longitude,
+  address,
+  landmark,
+  product_available,
+  problem_type,
+  problem_description,
+  created_at
+`)
+
         .eq("company_id", companyId)
         .order("created_at", { ascending: false })
+        .limit(500) // ✅ safety limit (increase if needed)
 
       if (error) throw error
 
-      const list = shopsData || [] as Shop[]
+      const list = (data || []) as Shop[]
       setShops(list)
 
       setStats({
@@ -159,102 +168,74 @@ export default function OwnerPage() {
         productsStocked: list.filter((s) => s.product_available).length,
         rejections: list.filter((s) => !s.product_available).length,
       })
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to fetch data",
+        description: err.message || "Failed to load shops",
         variant: "destructive",
       })
     }
   }
+
 
   const fetchSessions = async (companyId: string) => {
     try {
-      const { data: sessionData, error: sessionError } = await supabase
+      const { data, error } = await supabase
         .from("login_sessions")
-        .select("id, user_id, login_at, logout_at, duration_minutes")
+        .select(`
+        id,
+        user_id,
+        login_at,
+        logout_at,
+        duration_minutes
+      `)
         .eq("company_id", companyId)
         .order("login_at", { ascending: false })
-
-      if (sessionError) throw sessionError
-      const sessionsList = sessionData || []
-
-      if (sessionsList.length === 0) {
-        setSessions([])
-        return
-      }
-
-      const userIds = Array.from(new Set(sessionsList.map((s: any) => s.user_id)))
-
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", userIds)
-
-      if (profilesError) throw profilesError
-
-      const nameMap = new Map<string, string | null>()
-        ; (profilesData || []).forEach((p: any) => {
-          nameMap.set(p.id, p.full_name ?? null)
-        })
-
-      const mapped: SessionRow[] = sessionsList.map((row: any) => ({
-        id: row.id,
-        user_id: row.user_id,
-        name: nameMap.get(row.user_id) ?? null,
-        login_at: row.login_at,
-        logout_at: row.logout_at,
-        duration_minutes: row.duration_minutes,
-      }))
-
-      setSessions(mapped)
-    } catch (err: any) {
-      console.error("fetchSessions error", err)
-      toast({
-        title: "Error",
-        description: err?.message || "Failed to load sessions",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const fetchShopProducts = async (companyId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("shop_products")
-        .select(
-          `
-          shop_id,
-          product_name,
-          shops!inner (
-            id,
-            shop_name
-          )
-        `,
-        )
-        .eq("company_id", companyId)
-        .order("shop_name", { foreignTable: "shops" })
-        .order("product_name")
+        .limit(100)
 
       if (error) throw error
 
-      const mapped: ShopProductRow[] =
-        (data || []).map((row: any) => ({
-          shop_id: row.shop_id,
-          shop_name: row.shops.shop_name,
-          product_name: row.product_name,
-        })) ?? []
-
-      setShopProducts(mapped)
+      setSessions(data ?? [])
     } catch (err: any) {
-      console.error("fetchShopProducts error", err)
-      toast({
-        title: "Error",
-        description: err?.message || "Failed to load product availability",
-        variant: "destructive",
-      })
+      console.error("login_sessions error", err)
     }
   }
+
+  const shopIds = shops.map((s) => s.id)
+  const fetchShopProducts = async () => {
+    if (shopIds.length === 0) {
+      setShopProducts([])
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("shop_products")
+        .select(`
+        shop_id,
+        product_name,
+        shops (
+          shop_name
+        )
+      `)
+        .in("shop_id", shopIds)
+        .limit(500)
+
+      if (error) throw error
+
+      const mapped: ShopProductRow[] = (data || []).map((row: any) => ({
+        shop_id: row.shop_id,
+        shop_name: row.shops.shop_name,
+        product_name: row.product_name,
+      }))
+
+      setShopProducts(mapped)
+    } catch (err) {
+      console.error("fetchShopProducts failed", err)
+    }
+  }
+
+
 
   /* -------------------- ACTIONS -------------------- */
   const handleLogout = async () => {
@@ -408,12 +389,17 @@ export default function OwnerPage() {
   const availabilityByShop = Object.entries(
     shopProducts.reduce((acc: any, row) => {
       if (!acc[row.shop_id]) {
-        acc[row.shop_id] = { name: row.shop_name, products: [] as string[] }
+        acc[row.shop_id] = {
+          shop_id: row.shop_id,
+          name: row.shop_name,
+          products: [],
+        }
       }
       acc[row.shop_id].products.push(row.product_name)
       return acc
-    }, {}),
+    }, {})
   )
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 pb-8">
@@ -701,7 +687,8 @@ export default function OwnerPage() {
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                            ))
+                            }
                           </tbody>
                         </table>
                       </div>
@@ -740,13 +727,7 @@ export default function OwnerPage() {
                             </div>
                           )}
 
-                          {shop.selfie_url && (
-                            <img
-                              src={shop.selfie_url}
-                              alt="Shop"
-                              className="mt-3 h-32 w-full rounded object-cover"
-                            />
-                          )}
+
                         </div>
                       ))}
                     </div>
